@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,21 +17,23 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __WILDCARD_TREE_H__
-#define __WILDCARD_TREE_H__
+#ifndef FS_WILDCARDTREE_H_054C9BA46A1D4EA4B7C77ECE60ED4DEB
+#define FS_WILDCARDTREE_H_054C9BA46A1D4EA4B7C77ECE60ED4DEB
 
-#include <map>
-#include <string>
-
-#include "thing.h"
+#include "enums.h"
 
 class WildcardTreeNode
 {
 	public:
-		WildcardTreeNode(bool breakpoint);
-		~WildcardTreeNode();
+		explicit WildcardTreeNode(bool breakpoint) : breakpoint(breakpoint) {}
+		WildcardTreeNode(WildcardTreeNode&& other) = default;
 
-		WildcardTreeNode* getChild(char ch) const;
+		// non-copyable
+		WildcardTreeNode(const WildcardTreeNode&) = delete;
+		WildcardTreeNode& operator=(const WildcardTreeNode&) = delete;
+
+		WildcardTreeNode* getChild(char ch);
+		const WildcardTreeNode* getChild(char ch) const;
 		WildcardTreeNode* addChild(char ch, bool breakpoint);
 
 		void insert(const std::string& str);
@@ -40,7 +42,7 @@ class WildcardTreeNode
 		ReturnValue findOne(const std::string& query, std::string& result) const;
 
 	private:
-		std::map<char, WildcardTreeNode*> children;
+		std::map<char, WildcardTreeNode> children;
 		bool breakpoint;
 };
 

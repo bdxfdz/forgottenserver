@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,286 +19,192 @@
 
 #include "otpch.h"
 
-#include "definitions.h"
 #include "vocation.h"
-#include <iostream>
-#include <libxml/xmlmemory.h>
-#include <libxml/parser.h>
 
+#include "pugicast.h"
 #include "tools.h"
-
-Vocations::Vocations()
-{
-	//
-}
-
-Vocations::~Vocations()
-{
-	for (VocationsMap::iterator it = vocationsMap.begin(); it != vocationsMap.end(); ++it) {
-		delete it->second;
-	}
-
-	vocationsMap.clear();
-}
 
 bool Vocations::loadFromXml()
 {
-	std::string filename = "data/XML/vocations.xml";
-
-	xmlDocPtr doc = xmlParseFile(filename.c_str());
-
-	if (doc) {
-		xmlNodePtr root, p;
-		root = xmlDocGetRootElement(doc);
-
-		if (xmlStrcmp(root->name, (const xmlChar*)"vocations") != 0) {
-			xmlFreeDoc(doc);
-			return false;
-		}
-
-		p = root->children;
-
-		while (p) {
-			std::string str;
-			int32_t intVal;
-
-			if (xmlStrcmp(p->name, (const xmlChar*)"vocation") == 0) {
-				Vocation* voc = new Vocation();
-				xmlNodePtr configNode;
-
-				if (readXMLInteger(p, "id", intVal)) {
-					float floatVal;
-
-					voc->id = intVal;
-
-					if (readXMLString(p, "name", str)) {
-						voc->name = str;
-					}
-
-					if (readXMLInteger(p, "clientid", intVal)) {
-						voc->clientId = intVal;
-					}
-
-					if (readXMLString(p, "description", str)) {
-						voc->description = str;
-					}
-
-					if (readXMLInteger(p, "gaincap", intVal)) {
-						voc->gainCap = intVal;
-					}
-
-					if (readXMLInteger(p, "gainhp", intVal)) {
-						voc->gainHP = intVal;
-					}
-
-					if (readXMLInteger(p, "gainmana", intVal)) {
-						voc->gainMana = intVal;
-					}
-
-					if (readXMLInteger(p, "gainhpticks", intVal)) {
-						voc->gainHealthTicks = intVal;
-					}
-
-					if (readXMLInteger(p, "gainhpamount", intVal)) {
-						voc->gainHealthAmount = intVal;
-					}
-
-					if (readXMLInteger(p, "gainmanaticks", intVal)) {
-						voc->gainManaTicks = intVal;
-					}
-
-					if (readXMLInteger(p, "gainmanaamount", intVal)) {
-						voc->gainManaAmount = intVal;
-					}
-
-					if (readXMLFloat(p, "manamultiplier", floatVal)) {
-						voc->manaMultiplier = floatVal;
-					}
-
-					if (readXMLInteger(p, "attackspeed", intVal)) {
-						voc->attackSpeed = intVal;
-					}
-
-					if (readXMLInteger(p, "basespeed", intVal)) {
-						voc->baseSpeed = intVal;
-					}
-
-					if (readXMLInteger(p, "soulmax", intVal)) {
-						voc->soulMax = intVal;
-					}
-
-					if (readXMLInteger(p, "gainsoulticks", intVal)) {
-						voc->gainSoulTicks = intVal;
-					}
-
-					if (readXMLInteger(p, "fromvoc", intVal)) {
-						voc->fromVocation = intVal;
-					}
-
-					configNode = p->children;
-
-					while (configNode) {
-						if (xmlStrcmp(configNode->name, (const xmlChar*)"skill") == 0) {
-							uint32_t skill_id;
-
-							if (readXMLInteger(configNode, "id", intVal)) {
-								skill_id = intVal;
-
-								if (skill_id > SKILL_LAST) {
-									std::cout << "No valid skill id. " << skill_id << std::endl;
-								} else {
-									if (readXMLFloat(configNode, "multiplier", floatVal)) {
-										voc->skillMultipliers[skill_id] = floatVal;
-									}
-								}
-							} else {
-								std::cout << "Missing skill id." << std::endl;
-							}
-						} else if (xmlStrcmp(configNode->name, (const xmlChar*)"formula") == 0) {
-							if (readXMLFloat(configNode, "meleeDamage", floatVal)) {
-								voc->meleeDamageMultipler = floatVal;
-							}
-
-							if (readXMLFloat(configNode, "distDamage", floatVal)) {
-								voc->distDamageMultipler = floatVal;
-							}
-
-							if (readXMLFloat(configNode, "defense", floatVal)) {
-								voc->defenseMultipler = floatVal;
-							}
-
-							if (readXMLFloat(configNode, "armor", floatVal)) {
-								voc->armorMultipler = floatVal;
-							}
-						}
-
-						configNode = configNode->next;
-					}
-
-					vocationsMap[voc->id] = voc;
-				} else {
-					std::cout << "Missing vocation id." << std::endl;
-				}
-			}
-
-			p = p->next;
-		}
-
-		xmlFreeDoc(doc);
+	pugi::xml_document doc;
+	pugi::xml_parse_result result = doc.load_file("data/XML/vocations.xml");
+	if (!result) {
+		printXMLError("Error - Vocations::loadFromXml", "data/XML/vocations.xml", result);
+		return false;
 	}
 
+	for (auto vocationNode : doc.child("vocations").children()) {
+		pugi::xml_attribute attr;
+		if (!(attr = vocationNode.attribute("id"))) {
+			std::cout << "[Warning - Vocations::loadFromXml] Missing vocation id" << std::endl;
+			continue;
+		}
+
+		uint16_t id = pugi::cast<uint16_t>(attr.value());
+
+		auto res = vocationsMap.emplace(std::piecewise_construct,
+				std::forward_as_tuple(id), std::forward_as_tuple(id));
+		Vocation& voc = res.first->second;
+
+		if ((attr = vocationNode.attribute("name"))) {
+			voc.name = attr.as_string();
+		}
+
+		if ((attr = vocationNode.attribute("clientid"))) {
+			voc.clientId = pugi::cast<uint16_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("description"))) {
+			voc.description = attr.as_string();
+		}
+
+		if ((attr = vocationNode.attribute("gaincap"))) {
+			voc.gainCap = pugi::cast<uint32_t>(attr.value()) * 100;
+		}
+
+		if ((attr = vocationNode.attribute("gainhp"))) {
+			voc.gainHP = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("gainmana"))) {
+			voc.gainMana = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("gainhpticks"))) {
+			voc.gainHealthTicks = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("gainhpamount"))) {
+			voc.gainHealthAmount = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("gainmanaticks"))) {
+			voc.gainManaTicks = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("gainmanaamount"))) {
+			voc.gainManaAmount = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("manamultiplier"))) {
+			voc.manaMultiplier = pugi::cast<float>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("attackspeed"))) {
+			voc.attackSpeed = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("basespeed"))) {
+			voc.baseSpeed = pugi::cast<uint32_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("soulmax"))) {
+			voc.soulMax = pugi::cast<uint16_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("gainsoulticks"))) {
+			voc.gainSoulTicks = pugi::cast<uint16_t>(attr.value());
+		}
+
+		if ((attr = vocationNode.attribute("fromvoc"))) {
+			voc.fromVocation = pugi::cast<uint32_t>(attr.value());
+		}
+
+		for (auto childNode : vocationNode.children()) {
+			if (strcasecmp(childNode.name(), "skill") == 0) {
+				pugi::xml_attribute skillIdAttribute = childNode.attribute("id");
+				if (skillIdAttribute) {
+					uint16_t skill_id = pugi::cast<uint16_t>(skillIdAttribute.value());
+					if (skill_id <= SKILL_LAST) {
+						voc.skillMultipliers[skill_id] = pugi::cast<float>(childNode.attribute("multiplier").value());
+					} else {
+						std::cout << "[Notice - Vocations::loadFromXml] No valid skill id: " << skill_id << " for vocation: " << voc.id << std::endl;
+					}
+				} else {
+					std::cout << "[Notice - Vocations::loadFromXml] Missing skill id for vocation: " << voc.id << std::endl;
+				}
+			} else if (strcasecmp(childNode.name(), "formula") == 0) {
+				pugi::xml_attribute meleeDamageAttribute = childNode.attribute("meleeDamage");
+				if (meleeDamageAttribute) {
+					voc.meleeDamageMultiplier = pugi::cast<float>(meleeDamageAttribute.value());
+				}
+
+				pugi::xml_attribute distDamageAttribute = childNode.attribute("distDamage");
+				if (distDamageAttribute) {
+					voc.distDamageMultiplier = pugi::cast<float>(distDamageAttribute.value());
+				}
+
+				pugi::xml_attribute defenseAttribute = childNode.attribute("defense");
+				if (defenseAttribute) {
+					voc.defenseMultiplier = pugi::cast<float>(defenseAttribute.value());
+				}
+
+				pugi::xml_attribute armorAttribute = childNode.attribute("armor");
+				if (armorAttribute) {
+					voc.armorMultiplier = pugi::cast<float>(armorAttribute.value());
+				}
+			}
+		}
+	}
 	return true;
 }
 
-Vocation* Vocations::getVocation(uint32_t id)
+Vocation* Vocations::getVocation(uint16_t id)
 {
-	VocationsMap::iterator it = vocationsMap.find(id);
+	auto it = vocationsMap.find(id);
 	if (it == vocationsMap.end()) {
-		std::cout << "Warning: [Vocations::getVocation] Vocation " << id << " not found." << std::endl;
-		return &def_voc;
+		std::cout << "[Warning - Vocations::getVocation] Vocation " << id << " not found." << std::endl;
+		return nullptr;
 	}
-	return it->second;
+	return &it->second;
 }
 
-int32_t Vocations::getVocationId(const std::string& name)
+int32_t Vocations::getVocationId(const std::string& name) const
 {
-	for (VocationsMap::iterator it = vocationsMap.begin(); it != vocationsMap.end(); ++it) {
-		if (strcasecmp(it->second->name.c_str(), name.c_str()) == 0) {
-			return it->first;
+	for (const auto& it : vocationsMap) {
+		if (strcasecmp(it.second.name.c_str(), name.c_str()) == 0) {
+			return it.first;
 		}
 	}
 	return -1;
 }
 
-int32_t Vocations::getPromotedVocation(uint32_t vocationId)
+uint16_t Vocations::getPromotedVocation(uint16_t vocationId) const
 {
-	for (VocationsMap::iterator it = vocationsMap.begin(); it != vocationsMap.end(); ++it) {
-		if (it->second->fromVocation == vocationId && it->first != vocationId) {
-			return it->first;
+	for (const auto& it : vocationsMap) {
+		if (it.second.fromVocation == vocationId && it.first != vocationId) {
+			return it.first;
 		}
 	}
-
-	return 0;
+	return VOCATION_NONE;
 }
 
 uint32_t Vocation::skillBase[SKILL_LAST + 1] = {50, 50, 50, 50, 30, 100, 20};
 
-Vocation::Vocation()
+uint64_t Vocation::getReqSkillTries(uint8_t skill, uint16_t level)
 {
-	name = "none";
-	description = "";
-	gainHealthTicks = 6;
-	gainHealthAmount = 1;
-	gainManaTicks = 6;
-	gainManaAmount = 1;
-	gainSoulTicks = 120;
-	soulMax = 100;
-
-	clientId = 0;
-	fromVocation = 0;
-
-	gainCap = 5;
-	gainMana = 5;
-	gainHP = 5;
-	attackSpeed = 1500;
-	baseSpeed = 220;
-	manaMultiplier = 4.0;
-	meleeDamageMultipler = 1.0;
-	distDamageMultipler = 1.0;
-	defenseMultipler = 1.0;
-	armorMultipler = 1.0;
-	skillMultipliers[0] = 1.5f;
-	skillMultipliers[1] = 2.0f;
-	skillMultipliers[2] = 2.0f;
-	skillMultipliers[3] = 2.0f;
-	skillMultipliers[4] = 2.0f;
-	skillMultipliers[5] = 1.5f;
-	skillMultipliers[6] = 1.1f;
-}
-
-Vocation::~Vocation()
-{
-	cacheMana.clear();
-
-	for (int32_t i = SKILL_FIRST; i < SKILL_LAST; ++i) {
-		cacheSkill[i].clear();
-	}
-}
-
-uint32_t Vocation::getReqSkillTries(int32_t skill, int32_t level)
-{
-	if (skill < SKILL_FIRST || skill > SKILL_LAST) {
+	if (skill > SKILL_LAST) {
 		return 0;
 	}
 
-	skillCacheMap& skillMap = cacheSkill[skill];
-	skillCacheMap::iterator it = skillMap.find(level);
-
+	auto it = cacheSkill[skill].find(level);
 	if (it != cacheSkill[skill].end()) {
 		return it->second;
 	}
 
-	uint32_t tries = (uint32_t)(skillBase[skill] * pow((float)skillMultipliers[skill], (float)(level - 11)));
-	skillMap[level] = tries;
+	uint64_t tries = static_cast<uint64_t>(skillBase[skill] * std::pow(static_cast<double>(skillMultipliers[skill]), level - 11));
+	cacheSkill[skill][level] = tries;
 	return tries;
 }
 
 uint64_t Vocation::getReqMana(uint32_t magLevel)
 {
-	manaCacheMap::iterator it = cacheMana.find(magLevel);
-
+	auto it = cacheMana.find(magLevel);
 	if (it != cacheMana.end()) {
 		return it->second;
 	}
 
-	uint64_t reqMana = (uint64_t)(400 * pow(manaMultiplier, (int) magLevel - 1));
-
-	if (reqMana % 20 < 10) {
-		reqMana = reqMana - (reqMana % 20);
-	} else {
-		reqMana = reqMana - (reqMana % 20) + 20;
-	}
-
+	uint64_t reqMana = std::floor<uint64_t>(1600 * std::pow<double>(manaMultiplier, static_cast<int32_t>(magLevel) - 1));
 	cacheMana[magLevel] = reqMana;
 	return reqMana;
 }

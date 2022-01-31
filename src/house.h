@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,61 +17,55 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_HOUSE_H__
-#define __OTSERV_HOUSE_H__
-
-#include <string>
-#include <list>
-#include <map>
+#ifndef FS_HOUSE_H_EB9732E7771A438F9CD0EFA8CB4C58C4
+#define FS_HOUSE_H_EB9732E7771A438F9CD0EFA8CB4C58C4
 
 #include <regex>
+#include <set>
+#include <unordered_set>
 
-#include "definitions.h"
-#include "position.h"
+#include "container.h"
 #include "housetile.h"
-#include "player.h"
+#include "position.h"
 
 class House;
 class BedItem;
+class Player;
 
 class AccessList
 {
 	public:
-		AccessList();
-		~AccessList();
-
-		bool parseList(const std::string& _list);
-		bool addPlayer(const std::string& name);
-		bool addGuild(const std::string& guildName, const std::string& rank);
-		bool addExpression(const std::string& expression);
+		void parseList(const std::string& list);
+		void addPlayer(const std::string& name);
+		void addGuild(const std::string& name);
+		void addGuildRank(const std::string& name, const std::string& rankName);
+		void addExpression(const std::string& expression);
 
 		bool isInList(const Player* player);
 
-		void getList(std::string& _list) const;
+		void getList(std::string& list) const;
 
 	private:
-		typedef std::unordered_set<uint32_t> PlayerList;
-		typedef std::unordered_set<uint32_t> GuildList; //TODO: include ranks
-
-		typedef std::list<std::string> ExpressionList;
-		typedef std::list<std::pair<std::regex, bool> > RegExList;
 		std::string list;
-		PlayerList playerList;
-		GuildList guildList;
-		ExpressionList expressionList;
-		RegExList regExList;
+		std::unordered_set<uint32_t> playerList;
+		std::unordered_set<uint32_t> guildRankList;
+		std::list<std::string> expressionList;
+		std::list<std::pair<std::regex, bool>> regExList;
 };
 
-class Door : public Item
+class Door final : public Item
 {
 	public:
-		Door(uint16_t _type);
-		virtual ~Door();
+		explicit Door(uint16_t type);
 
-		virtual Door* getDoor() {
+		// non-copyable
+		Door(const Door&) = delete;
+		Door& operator=(const Door&) = delete;
+
+		Door* getDoor() override {
 			return this;
 		}
-		virtual const Door* getDoor() const {
+		const Door* getDoor() const override {
 			return this;
 		}
 
@@ -80,14 +74,14 @@ class Door : public Item
 		}
 
 		//serialization
-		virtual Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream);
-		virtual bool serializeAttr(PropWriteStream& propWriteStream) const;
+		Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
+		void serializeAttr(PropWriteStream&) const override {}
 
-		void setDoorId(uint32_t _doorId) {
-			setIntAttr(ATTR_ITEM_DOORID, (uint32_t)_doorId);
+		void setDoorId(uint32_t doorId) {
+			setIntAttr(ITEM_ATTRIBUTE_DOORID, doorId);
 		}
 		uint32_t getDoorId() const {
-			return getIntAttr(ATTR_ITEM_DOORID);
+			return getIntAttr(ITEM_ATTRIBUTE_DOORID);
 		}
 
 		bool canUse(const Player* player);
@@ -95,71 +89,59 @@ class Door : public Item
 		void setAccessList(const std::string& textlist);
 		bool getAccessList(std::string& list) const;
 
-		//overrides
-		virtual void onRemoved();
-		void copyAttributes(Item* item);
-
-	protected:
-		void setHouse(House* _house);
+		void onRemoved() override;
 
 	private:
-		House* house;
-		AccessList* accessList;
+		void setHouse(House* house);
+
+		House* house = nullptr;
+		std::unique_ptr<AccessList> accessList;
 		friend class House;
 };
 
 enum AccessList_t {
 	GUEST_LIST = 0x100,
-	SUBOWNER_LIST = 0x101
+	SUBOWNER_LIST = 0x101,
 };
 
 enum AccessHouseLevel_t {
-	HOUSE_NO_INVITED = 0,
+	HOUSE_NOT_INVITED = 0,
 	HOUSE_GUEST = 1,
 	HOUSE_SUBOWNER = 2,
-	HOUSE_OWNER = 3
+	HOUSE_OWNER = 3,
 };
 
-typedef std::list<HouseTile*> HouseTileList;
-typedef std::list<Door*> HouseDoorList;
-typedef std::list<BedItem*> HouseBedItemList;
+using HouseTileList = std::list<HouseTile*>;
+using HouseBedItemList = std::list<BedItem*>;
 
-class HouseTransferItem : public Item
+class HouseTransferItem final : public Item
 {
 	public:
 		static HouseTransferItem* createHouseTransferItem(House* house);
 
-		HouseTransferItem(House* _house) : Item(0) {
-			house = _house;
-		}
-		virtual ~HouseTransferItem() {}
+		explicit HouseTransferItem(House* house) : Item(0), house(house) {}
 
-		virtual bool onTradeEvent(TradeEvents_t event, Player* owner);
-
-		House* getHouse() {
-			return house;
-		}
-		virtual bool canTransform() const {
+		void onTradeEvent(TradeEvents_t event, Player* owner) override;
+		bool canTransform() const override {
 			return false;
 		}
 
-	protected:
+	private:
 		House* house;
 };
 
 class House
 {
 	public:
-		House(uint32_t _houseid);
-		~House() {}
+		explicit House(uint32_t houseId);
 
 		void addTile(HouseTile* tile);
-		void updateDoorDescription();
+		void updateDoorDescription() const;
 
 		bool canEditAccessList(uint32_t listId, const Player* player);
 		// listId special values:
-		//	GUEST_LIST	 guest list
-		//  SUBOWNER_LIST subowner list
+		// GUEST_LIST	 guest list
+		// SUBOWNER_LIST subowner list
 		void setAccessList(uint32_t listId, const std::string& textlist);
 		bool getAccessList(uint32_t listId, std::string& list) const;
 
@@ -168,34 +150,34 @@ class House
 		AccessHouseLevel_t getHouseAccessLevel(const Player* player);
 		bool kickPlayer(Player* player, Player* target);
 
-		void setEntryPos(const Position& pos) {
+		void setEntryPos(Position pos) {
 			posEntry = pos;
 		}
 		const Position& getEntryPosition() const {
 			return posEntry;
 		}
 
-		void setName(const std::string& _houseName) {
-			houseName = _houseName;
+		void setName(std::string houseName) {
+			this->houseName = houseName;
 		}
 		const std::string& getName() const {
 			return houseName;
 		}
 
-		void setHouseOwner(uint32_t guid, bool updateDatabase = true, Player* player = NULL);
-		uint32_t getHouseOwner() const {
-			return houseOwner;
+		void setOwner(uint32_t guid, bool updateDatabase = true, Player* player = nullptr);
+		uint32_t getOwner() const {
+			return owner;
 		}
 
-		void setPaidUntil(uint32_t paid) {
+		void setPaidUntil(time_t paid) {
 			paidUntil = paid;
 		}
-		uint32_t getPaidUntil() const {
+		time_t getPaidUntil() const {
 			return paidUntil;
 		}
 
-		void setRent(uint32_t _rent) {
-			rent = _rent;
+		void setRent(uint32_t rent) {
+			this->rent = rent;
 		}
 		uint32_t getRent() const {
 			return rent;
@@ -208,126 +190,127 @@ class House
 			return rentWarnings;
 		}
 
-		void setTownId(uint32_t _town) {
-			townid = _town;
+		void setTownId(uint32_t townId) {
+			this->townId = townId;
 		}
 		uint32_t getTownId() const {
-			return townid;
+			return townId;
 		}
 
-		uint32_t getHouseId() const {
-			return houseid;
+		uint32_t getId() const {
+			return id;
 		}
 
 		void addDoor(Door* door);
 		void removeDoor(Door* door);
-		Door* getDoorByNumber(uint32_t doorId);
 		Door* getDoorByNumber(uint32_t doorId) const;
 		Door* getDoorByPosition(const Position& pos);
 
 		HouseTransferItem* getTransferItem();
 		void resetTransferItem();
-		bool executeTransfer(HouseTransferItem* item, Player* player);
+		bool executeTransfer(HouseTransferItem* item, Player* newOwner);
 
-		const HouseTileList& getHouseTiles() const {
+		const HouseTileList& getTiles() const {
 			return houseTiles;
 		}
 
-		const HouseDoorList& getHouseDoors() const {
-			return doorList;
+		const std::set<Door*>& getDoors() const {
+			return doorSet;
 		}
 
 		void addBed(BedItem* bed);
-		HouseBedItemList::iterator getHouseBedsBegin() {
-			return bedsList.begin();
-		}
-		HouseBedItemList::iterator getHouseBedsEnd() {
-			return bedsList.end();
-		}
-		size_t getBedTiles() {
-			return bedsList.size();
+		const HouseBedItemList& getBeds() const {
+			return bedsList;
 		}
 		uint32_t getBedCount() {
-			return (uint32_t)std::ceil((double)getBedTiles() / 2);   //each bed takes 2 sqms of space, ceil is just for bad maps
+			return static_cast<uint32_t>(std::ceil(bedsList.size() / 2.)); //each bed takes 2 sqms of space, ceil is just for bad maps
 		}
 
 	private:
-		bool transferToDepot();
-		bool transferToDepot(Player* player);
+		bool transferToDepot() const;
+		bool transferToDepot(Player* player) const;
 
-		bool isLoaded;
-		uint32_t houseid;
-		uint32_t houseOwner;
-		std::string houseOwnerName;
-		HouseTileList houseTiles;
-		HouseDoorList doorList;
-		HouseBedItemList bedsList;
 		AccessList guestList;
 		AccessList subOwnerList;
-		std::string houseName;
-		Position posEntry;
-		uint32_t paidUntil;
-		uint32_t rentWarnings;
-		uint32_t rent;
-		uint32_t townid;
 
-		HouseTransferItem* transferItem;
-		Container transfer_container;
+		Container transfer_container{ITEM_LOCKER1};
+
+		HouseTileList houseTiles;
+		std::set<Door*> doorSet;
+		HouseBedItemList bedsList;
+
+		std::string houseName;
+		std::string ownerName;
+
+		HouseTransferItem* transferItem = nullptr;
+
+		time_t paidUntil = 0;
+
+		uint32_t id;
+		uint32_t owner = 0;
+		uint32_t rentWarnings = 0;
+		uint32_t rent = 0;
+		uint32_t townId = 0;
+
+		Position posEntry = {};
+
+		bool isLoaded = false;
 };
 
-typedef std::map<uint32_t, House*> HouseMap;
+using HouseMap = std::map<uint32_t, House*>;
 
 enum RentPeriod_t {
 	RENTPERIOD_DAILY,
 	RENTPERIOD_WEEKLY,
 	RENTPERIOD_MONTHLY,
 	RENTPERIOD_YEARLY,
-	RENTPERIOD_NEVER
+	RENTPERIOD_NEVER,
 };
 
 class Houses
 {
-		Houses();
+	public:
+		Houses() = default;
 		~Houses() {
-			for (HouseMap::iterator it = houseMap.begin(); it != houseMap.end(); ++it) {
-				delete it->second;
+			for (const auto& it : houseMap) {
+				delete it.second;
 			}
 		}
 
-	public:
-		static Houses& getInstance() {
-			static Houses instance;
-			return instance;
-		}
+		// non-copyable
+		Houses(const Houses&) = delete;
+		Houses& operator=(const Houses&) = delete;
 
-		House* getHouse(uint32_t houseid, bool add = false) {
-			HouseMap::iterator it = houseMap.find(houseid);
-
+		House* addHouse(uint32_t id) {
+			auto it = houseMap.find(id);
 			if (it != houseMap.end()) {
 				return it->second;
 			}
 
-			if (add) {
-				House* house = new House(houseid);
-				houseMap[houseid] = house;
-				return house;
-			} else {
-				return NULL;
+			House* house = new House(id);
+			houseMap[id] = house;
+			return house;
+		}
+
+		House* getHouse(uint32_t houseId) {
+			auto it = houseMap.find(houseId);
+			if (it == houseMap.end()) {
+				return nullptr;
 			}
+			return it->second;
 		}
 
 		House* getHouseByPlayerId(uint32_t playerId);
 
 		bool loadHousesXML(const std::string& filename);
 
-		bool payHouses();
+		void payHouses(RentPeriod_t rentPeriod) const;
 
 		const HouseMap& getHouses() const {
 			return houseMap;
 		}
 
 	private:
-		RentPeriod_t rentPeriod;
 		HouseMap houseMap;
 };
 

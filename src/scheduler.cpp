@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,157 +19,120 @@
 
 #include "otpch.h"
 
-#include <iostream>
 #include "scheduler.h"
 
-Scheduler::Scheduler()
+void Scheduler::threadMain()
 {
-	m_lastEventId = 0;
-	m_threadState = STATE_TERMINATED;
-}
+	std::unique_lock<std::mutex> eventLockUnique(eventLock, std::defer_lock);
+	while (getState() != THREAD_STATE_TERMINATED) {
+		std::cv_status ret = std::cv_status::no_timeout;
 
-void Scheduler::start()
-{
-	m_threadState = STATE_RUNNING;
-	m_thread = boost::thread(boost::bind(&Scheduler::schedulerThread, this));
-}
-
-void Scheduler::schedulerThread()
-{
-	// NOTE: second argument defer_lock is to prevent from immediate locking
-	boost::unique_lock<boost::mutex> eventLockUnique(m_eventLock, boost::defer_lock);
-
-	while (m_threadState != STATE_TERMINATED) {
-		SchedulerTask* task = NULL;
-		bool runTask = false;
-		bool ret = true;
-
-		// check if there are events waiting...
 		eventLockUnique.lock();
-
-		if (m_eventList.empty()) {
-			m_eventSignal.wait(eventLockUnique);
+		if (eventList.empty()) {
+			eventSignal.wait(eventLockUnique);
 		} else {
-			ret = m_eventSignal.timed_wait(eventLockUnique, m_eventList.top()->getCycle());
+			ret = eventSignal.wait_until(eventLockUnique, eventList.top()->getCycle());
 		}
 
 		// the mutex is locked again now...
-		if (!ret && m_threadState != STATE_TERMINATED) {
+		if (ret == std::cv_status::timeout && !eventList.empty()) {
 			// ok we had a timeout, so there has to be an event we have to execute...
-			task = m_eventList.top();
-			m_eventList.pop();
+			SchedulerTask* task = eventList.top();
+			eventList.pop();
 
 			// check if the event was stopped
-			EventIdSet::iterator it = m_eventIds.find(task->getEventId());
-			if (it != m_eventIds.end()) {
-				// was not stopped so we should run it
-				runTask = true;
-				m_eventIds.erase(it);
-			}
-		}
-
-		eventLockUnique.unlock();
-
-		// add task to dispatcher
-		if (task) {
-			// if it was not stopped
-			if (runTask) {
-				// Expiration has another meaning for dispatcher tasks, reset it
-				task->setDontExpire();
-				g_dispatcher.addTask(task);
-			} else {
-				// was stopped, have to be deleted here
+			auto it = eventIds.find(task->getEventId());
+			if (it == eventIds.end()) {
+				eventLockUnique.unlock();
 				delete task;
+				continue;
 			}
+			eventIds.erase(it);
+			eventLockUnique.unlock();
+
+			task->setDontExpire();
+			g_dispatcher.addTask(task, true);
+		} else {
+			eventLockUnique.unlock();
 		}
 	}
 }
 
 uint32_t Scheduler::addEvent(SchedulerTask* task)
 {
-	bool do_signal = false;
-	m_eventLock.lock();
+	eventLock.lock();
 
-	if (Scheduler::m_threadState == Scheduler::STATE_RUNNING) {
-		// check if the event has a valid id
-		if (task->getEventId() == 0) {
-			// if not generate one
-			if (m_lastEventId >= 0xFFFFFFFF) {
-				m_lastEventId = 0;
-			}
-
-			++m_lastEventId;
-			task->setEventId(m_lastEventId);
-		}
-
-		// insert the eventid in the list of active events
-		m_eventIds.insert(task->getEventId());
-
-		// add the event to the queue
-		m_eventList.push(task);
-
-		// if the list was empty or this event is the top in the list
-		// we have to signal it
-		do_signal = (task == m_eventList.top());
-	} else {
-		m_eventLock.unlock();
+	if (getState() != THREAD_STATE_RUNNING) {
+		eventLock.unlock();
 		delete task;
-		task = NULL;
 		return 0;
 	}
 
-	m_eventLock.unlock();
+	// check if the event has a valid id
+	if (task->getEventId() == 0) {
+		// if not generate one
+		if (++lastEventId == 0) {
+			lastEventId = 1;
+		}
+
+		task->setEventId(lastEventId);
+	}
+
+	// insert the event id in the list of active events
+	uint32_t eventId = task->getEventId();
+	eventIds.insert(eventId);
+
+	// add the event to the queue
+	eventList.push(task);
+
+	// if the list was empty or this event is the top in the list
+	// we have to signal it
+	bool do_signal = (task == eventList.top());
+
+	eventLock.unlock();
 
 	if (do_signal) {
-		m_eventSignal.notify_one();
+		eventSignal.notify_one();
 	}
 
-	return task->getEventId();
+	return eventId;
 }
 
-bool Scheduler::stopEvent(uint32_t eventid)
+bool Scheduler::stopEvent(uint32_t eventId)
 {
-	if (eventid == 0) {
+	if (eventId == 0) {
 		return false;
 	}
 
-	m_eventLock.lock();
+	std::lock_guard<std::mutex> lockClass(eventLock);
 
 	// search the event id..
-	EventIdSet::iterator it = m_eventIds.find(eventid);
-	if (it == m_eventIds.end()) {
-		m_eventLock.unlock();
+	auto it = eventIds.find(eventId);
+	if (it == eventIds.end()) {
 		return false;
 	}
 
-	m_eventIds.erase(it);
-	m_eventLock.unlock();
+	eventIds.erase(it);
 	return true;
-}
-
-void Scheduler::stop()
-{
-	m_eventLock.lock();
-	m_threadState = Scheduler::STATE_CLOSING;
-	m_eventLock.unlock();
 }
 
 void Scheduler::shutdown()
 {
-	m_eventLock.lock();
-	m_threadState = Scheduler::STATE_TERMINATED;
+	setState(THREAD_STATE_TERMINATED);
+	eventLock.lock();
 
 	//this list should already be empty
-	while (!m_eventList.empty()) {
-		delete m_eventList.top();
-		m_eventList.pop();
+	while (!eventList.empty()) {
+		delete eventList.top();
+		eventList.pop();
 	}
 
-	m_eventIds.clear();
-	m_eventLock.unlock();
+	eventIds.clear();
+	eventLock.unlock();
+	eventSignal.notify_one();
 }
 
-void Scheduler::join()
+SchedulerTask* createSchedulerTask(uint32_t delay, std::function<void (void)> f)
 {
-	m_thread.join();
+	return new SchedulerTask(delay, std::move(f));
 }

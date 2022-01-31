@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,167 +17,117 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_CONNECTION_H__
-#define __OTSERV_CONNECTION_H__
+#ifndef FS_CONNECTION_H_FC8E1B4392D24D27A2F129D8B93A6348
+#define FS_CONNECTION_H_FC8E1B4392D24D27A2F129D8B93A6348
 
-#include "definitions.h"
-#include <boost/asio.hpp>
-
-#include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/thread.hpp>
-#include <boost/enable_shared_from_this.hpp>
+#include <unordered_set>
 
 #include "networkmessage.h"
 
+static constexpr int32_t CONNECTION_WRITE_TIMEOUT = 30;
+static constexpr int32_t CONNECTION_READ_TIMEOUT = 30;
+
 class Protocol;
+using Protocol_ptr = std::shared_ptr<Protocol>;
 class OutputMessage;
-typedef boost::shared_ptr<OutputMessage> OutputMessage_ptr;
+using OutputMessage_ptr = std::shared_ptr<OutputMessage>;
 class Connection;
-typedef boost::shared_ptr<Connection> Connection_ptr;
+using Connection_ptr = std::shared_ptr<Connection> ;
+using ConnectionWeak_ptr = std::weak_ptr<Connection>;
 class ServiceBase;
-typedef boost::shared_ptr<ServiceBase> Service_ptr;
+using Service_ptr = std::shared_ptr<ServiceBase>;
 class ServicePort;
-typedef boost::shared_ptr<ServicePort> ServicePort_ptr;
+using ServicePort_ptr = std::shared_ptr<ServicePort>;
+using ConstServicePort_ptr = std::shared_ptr<const ServicePort>;
 
 class ConnectionManager
 {
 	public:
-		~ConnectionManager() {
-			closeAll();
-		}
-
-		static ConnectionManager* getInstance() {
+		static ConnectionManager& getInstance() {
 			static ConnectionManager instance;
-			return &instance;
+			return instance;
 		}
 
-		Connection_ptr createConnection(boost::asio::ip::tcp::socket* socket,
-		                                boost::asio::io_service& io_service, ServicePort_ptr servicers);
-		void releaseConnection(Connection_ptr connection);
+		Connection_ptr createConnection(boost::asio::io_service& io_service, ConstServicePort_ptr servicePort);
+		void releaseConnection(const Connection_ptr& connection);
 		void closeAll();
 
-	protected:
-		ConnectionManager() {
-		}
+	private:
+		ConnectionManager() = default;
 
-		std::list<Connection_ptr> m_connections;
-		boost::recursive_mutex m_connectionManagerLock;
+		std::unordered_set<Connection_ptr> connections;
+		std::mutex connectionManagerLock;
 };
 
-class Connection : public boost::enable_shared_from_this<Connection>, boost::noncopyable
+class Connection : public std::enable_shared_from_this<Connection>
 {
 	public:
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-		static uint32_t connectionCount;
-#endif
-
-		enum { write_timeout = 30 };
-		enum { read_timeout = 30 };
+		// non-copyable
+		Connection(const Connection&) = delete;
+		Connection& operator=(const Connection&) = delete;
 
 		enum ConnectionState_t {
-			CONNECTION_STATE_OPEN = 0,
-			CONNECTION_STATE_REQUEST_CLOSE = 1,
-			CONNECTION_STATE_CLOSING = 2,
-			CONNECTION_STATE_CLOSED = 3
+			CONNECTION_STATE_OPEN,
+			CONNECTION_STATE_CLOSED,
 		};
 
-	private:
-		Connection(boost::asio::ip::tcp::socket* socket,
-		           boost::asio::io_service& io_service,
-		           ServicePort_ptr service_port) :
-			m_socket(socket),
-			m_readTimer(io_service),
-			m_writeTimer(io_service),
-			m_io_service(io_service),
-			m_service_port(service_port) {
-			m_refCount = 0;
-			m_protocol = NULL;
-			m_pendingWrite = 0;
-			m_pendingRead = 0;
-			m_connectionState = CONNECTION_STATE_OPEN;
-			m_receivedFirst = false;
-			m_writeError = false;
-			m_readError = false;
-			m_packetsSent = 0;
-			m_timeConnected = time(NULL);
+		enum { FORCE_CLOSE = true };
 
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-			connectionCount++;
-#endif
-		}
+		Connection(boost::asio::io_service& io_service,
+		           ConstServicePort_ptr service_port) :
+			readTimer(io_service),
+			writeTimer(io_service),
+			service_port(std::move(service_port)),
+			socket(io_service),
+			timeConnected(time(nullptr)) {}
+		~Connection();
+
 		friend class ConnectionManager;
 
-	public:
-		~Connection() {
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-			connectionCount--;
-#endif
-		}
-
-		boost::asio::ip::tcp::socket& getHandle() {
-			return *m_socket;
-		}
-
-		void closeConnection();
+		void close(bool force = false);
 		// Used by protocols that require server to send first
-		void acceptConnection(Protocol* protocol);
-		void acceptConnection();
+		void accept(Protocol_ptr protocol);
+		void accept();
 
-		bool send(OutputMessage_ptr msg);
+		void send(const OutputMessage_ptr& msg);
 
-		uint32_t getIP() const;
-
-		int32_t addRef() {
-			return ++m_refCount;
-		}
-		int32_t unRef() {
-			return --m_refCount;
-		}
+		uint32_t getIP();
 
 	private:
 		void parseHeader(const boost::system::error_code& error);
 		void parsePacket(const boost::system::error_code& error);
 
-		void onWriteOperation(OutputMessage_ptr msg, const boost::system::error_code& error);
+		void onWriteOperation(const boost::system::error_code& error);
 
-		void onStopOperation();
-		void handleReadError(const boost::system::error_code& error);
-		void handleWriteError(const boost::system::error_code& error);
+		static void handleTimeout(ConnectionWeak_ptr connectionWeak, const boost::system::error_code& error);
 
-		static void handleReadTimeout(boost::weak_ptr<Connection> weak_conn, const boost::system::error_code& error);
-		static void handleWriteTimeout(boost::weak_ptr<Connection> weak_conn, const boost::system::error_code& error);
-
-		void closeConnectionTask();
-		void deleteConnectionTask();
-		void releaseConnection();
 		void closeSocket();
-		void onReadTimeout();
-		void onWriteTimeout();
+		void internalSend(const OutputMessage_ptr& msg);
 
-		void internalSend(OutputMessage_ptr msg);
+		boost::asio::ip::tcp::socket& getSocket() {
+			return socket;
+		}
+		friend class ServicePort;
 
-		NetworkMessage m_msg;
-		boost::asio::ip::tcp::socket* m_socket;
-		boost::asio::deadline_timer m_readTimer;
-		boost::asio::deadline_timer m_writeTimer;
-		boost::asio::io_service& m_io_service;
-		ServicePort_ptr m_service_port;
-		bool m_receivedFirst;
-		bool m_writeError;
-		bool m_readError;
+		NetworkMessage msg;
 
-		int32_t m_pendingWrite;
-		int32_t m_pendingRead;
-		ConnectionState_t m_connectionState;
-		uint32_t m_refCount;
-		static bool m_logError;
-		boost::recursive_mutex m_connectionLock;
+		boost::asio::deadline_timer readTimer;
+		boost::asio::deadline_timer writeTimer;
 
-		time_t m_timeConnected;
-		uint32_t m_packetsSent;
+		std::recursive_mutex connectionLock;
 
-		Protocol* m_protocol;
+		std::list<OutputMessage_ptr> messageQueue;
+
+		ConstServicePort_ptr service_port;
+		Protocol_ptr protocol;
+
+		boost::asio::ip::tcp::socket socket;
+
+		time_t timeConnected;
+		uint32_t packetsSent = 0;
+
+		bool connectionState = CONNECTION_STATE_OPEN;
+		bool receivedFirst = false;
 };
 
 #endif

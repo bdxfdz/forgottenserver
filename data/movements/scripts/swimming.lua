@@ -1,17 +1,21 @@
-local outfit =
-	{
-		lookType = 267,
-		lookHead = 0,
-		lookBody = 0,
-		lookLegs = 0,
-		lookFeet = 0,
-		lookAddons = 0
-	}
+local condition = Condition(CONDITION_OUTFIT)
+condition:setOutfit({lookType = 267})
+condition:setTicks(-1)
 
-function onStepIn(cid, item, position, fromPosition)
-	doSetCreatureOutfit(cid, outfit, -1)
+function onStepIn(creature, item, position, fromPosition)
+	if not creature:isPlayer() then
+		return false
+	end
+
+	creature:addCondition(condition)
+	return true
 end
 
-function onStepOut(cid, item, position, fromPosition)
-	doRemoveCondition(cid, CONDITION_OUTFIT)
+function onStepOut(creature, item, position, fromPosition)
+	if not creature:isPlayer() then
+		return false
+	end
+
+	creature:removeCondition(CONDITION_OUTFIT)
+	return true
 end

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,48 +17,28 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _QUESTS_H_
-#define _QUESTS_H_
+#ifndef FS_QUESTS_H_16E44051F23547BE8097F8EA9FCAACA0
+#define FS_QUESTS_H_16E44051F23547BE8097F8EA9FCAACA0
 
-#include <list>
-#include <string>
 #include "player.h"
 #include "networkmessage.h"
 
-class MissionState;
 class Mission;
 class Quest;
 
-typedef std::map<int32_t, MissionState*> StateList;
-typedef std::list<Mission*> MissionsList;
-typedef std::list<Quest*> QuestsList;
-
-class MissionState
-{
-	public:
-		MissionState(const std::string& _description, int32_t _missionID);
-
-		int32_t getMissionID() const {
-			return missionID;
-		}
-		std::string getMissionDescription() const {
-			return description;
-		}
-
-	private:
-		std::string description;
-		int32_t missionID;
-};
+using MissionsList = std::list<Mission>;
+using QuestsList = std::list<Quest>;
 
 class Mission
 {
 	public:
-		Mission(const std::string& _missionName, int32_t _storageID, int32_t _startValue, int32_t _endValue, bool _ignoreEndValue);
-		~Mission();
+		Mission(std::string name, int32_t storageID, int32_t startValue, int32_t endValue, bool ignoreEndValue) :
+			name(std::move(name)), storageID(storageID), startValue(startValue), endValue(endValue), ignoreEndValue(ignoreEndValue) {}
+
 		bool isCompleted(Player* player) const;
 		bool isStarted(Player* player) const;
-		std::string getName(Player* player);
-		std::string getDescription(Player* player);
+		std::string getName(Player* player) const;
+		std::string getDescription(Player* player) const;
 
 		uint32_t getStorageId() const {
 			return storageID;
@@ -70,11 +50,11 @@ class Mission
 			return endValue;
 		}
 
-		MissionState* mainState;
-		StateList state;
+		std::map<int32_t, std::string> descriptions;
+		std::string mainDescription;
 
 	private:
-		std::string missionName;
+		std::string name;
 		uint32_t storageID;
 		int32_t startValue, endValue;
 		bool ignoreEndValue;
@@ -83,10 +63,10 @@ class Mission
 class Quest
 {
 	public:
-		Quest(const std::string& _name, uint16_t _id, int32_t _startStorageID, int32_t _startStorageValue);
-		~Quest();
+		Quest(std::string name, uint16_t id, int32_t startStorageID, int32_t startStorageValue) :
+			name(std::move(name)), startStorageID(startStorageID), startStorageValue(startStorageValue), id(id) {}
 
-		bool isCompleted(Player* player);
+		bool isCompleted(Player* player) const;
 		bool isStarted(Player* player) const;
 		uint16_t getID() const {
 			return id;
@@ -103,15 +83,8 @@ class Quest
 			return startStorageValue;
 		}
 
-		void addMission(Mission* mission) {
-			missions.push_back(mission);
-		}
-
-		MissionsList::const_iterator getFirstMission() const {
-			return missions.begin();
-		}
-		MissionsList::const_iterator getLastMission() const {
-			return missions.end();
+		const MissionsList& getMissions() const {
+			return missions;
 		}
 
 	private:
@@ -122,30 +95,21 @@ class Quest
 		uint16_t id;
 
 		MissionsList missions;
+
+	friend class Quests;
 };
 
 class Quests
 {
 	public:
-		Quests();
-		~Quests();
-
-		static Quests* getInstance() {
-			static Quests instance;
-			return &instance;
-		}
-
-		QuestsList::const_iterator getFirstQuest() const {
-			return quests.begin();
-		}
-		QuestsList::const_iterator getLastQuest() const {
-			return quests.end();
+		const QuestsList& getQuests() const {
+			return quests;
 		}
 
 		bool loadFromXml();
 		Quest* getQuestByID(uint16_t id);
-		bool isQuestStorage(const uint32_t key, const int32_t value, const int32_t oldValue);
-		uint16_t getQuestsCount(Player* player);
+		bool isQuestStorage(const uint32_t key, const int32_t value, const int32_t oldValue) const;
+		uint16_t getQuestsCount(Player* player) const;
 		bool reload();
 
 	private:

@@ -1,47 +1,36 @@
 local playerPosition = {
-	{x = 247, y = 659, z = 13, stackpos = STACKPOS_TOP_CREATURE},
-	{x = 247, y = 660, z = 13, stackpos = STACKPOS_TOP_CREATURE},
-	{x = 247, y = 661, z = 13, stackpos = STACKPOS_TOP_CREATURE},
-	{x = 247, y = 662, z = 13, stackpos = STACKPOS_TOP_CREATURE}
+	{x = 247, y = 659, z = 13},
+	{x = 247, y = 660, z = 13},
+	{x = 247, y = 661, z = 13},
+	{x = 247, y = 662, z = 13}
 }
-
 local newPosition = {
 	{x = 189, y = 650, z = 13},
- 	{x = 189, y = 651, z = 13},
+	{x = 189, y = 651, z = 13},
 	{x = 189, y = 652, z = 13},
 	{x = 189, y = 653, z = 13}
 }
 
--- Do not modify the declaration lines below.
-function onUse(cid, item, fromPosition, itemEx, toPosition)
-	local player = {}
-	local failed = FALSE
+function onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	if item.itemid == 1945 then
-		for i = 1, 4 do
-			failed = TRUE
-			player[i] = getThingfromPos(playerPosition[i])
-			if player[i].itemid > 0 then
-				if isPlayer(player[i].uid) == TRUE then
-					if getPlayerStorageValue(player[i].uid, 30015) == -1 then
-						if getPlayerLevel(player[i].uid) >= 100 then
-							failed = FALSE
-						end
-					end
-				end
+		local players = {}
+		for _, position in ipairs(playerPosition) do
+			local topPlayer = Tile(position):getTopCreature()
+			if not topPlayer or not topPlayer:isPlayer() or topPlayer:getLevel() < 100 or topPlayer:getStorageValue(PlayerStorageKeys.annihilatorReward) ~= -1 then
+				player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+				return false
 			end
-			if failed == TRUE then
-				doPlayerSendCancel(cid, "Sorry, not possible.")
-				return TRUE
-			end
+			players[#players + 1] = topPlayer
 		end
-		for i = 1, 4 do
-			doSendMagicEffect(playerPosition[i], CONST_ME_POFF)
-			doTeleportThing(player[i].uid, newPosition[i], FALSE)
-			doSendMagicEffect(newPosition[i], CONST_ME_ENERGYAREA)
+
+		for i, targetPlayer in ipairs(players) do
+			Position(playerPosition[i]):sendMagicEffect(CONST_ME_POFF)
+			targetPlayer:teleportTo(newPosition[i], false)
+			targetPlayer:getPosition():sendMagicEffect(CONST_ME_ENERGYAREA)
 		end
-		doTransformItem(item.uid, item.itemid + 1)
+		item:transform(1946)
 	elseif item.itemid == 1946 then
-		doPlayerSendCancel(cid, "Sorry, not possible.")
+		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
 	end
-	return TRUE
+	return true
 end

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,51 +17,49 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_DEPOTLOCKER_H__
-#define __OTSERV_DEPOTLOCKER_H__
+#ifndef FS_DEPOTLOCKER_H_53AD8E0606A34070B87F792611F4F3F8
+#define FS_DEPOTLOCKER_H_53AD8E0606A34070B87F792611F4F3F8
 
 #include "container.h"
 #include "inbox.h"
 
-class DepotLocker : public Container
+class DepotLocker final : public Container
 {
 	public:
-		DepotLocker(uint16_t _type);
-		~DepotLocker();
+		explicit DepotLocker(uint16_t type);
 
-		DepotLocker* getDepotLocker() {
+		DepotLocker* getDepotLocker() override {
 			return this;
 		}
-		const DepotLocker* getDepotLocker() const {
+		const DepotLocker* getDepotLocker() const override {
 			return this;
 		}
 
 		void removeInbox(Inbox* inbox);
 
 		//serialization
-		Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream);
+		Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
 
-		uint32_t getDepotId() const {
+		uint16_t getDepotId() const {
 			return depotId;
 		}
-		void setDepotId(uint32_t id) {
-			depotId = id;
+		void setDepotId(uint16_t depotId) {
+			this->depotId = depotId;
 		}
 
 		//cylinder implementations
-		ReturnValue __queryAdd(int32_t index, const Thing* thing, uint32_t count,
-		                       uint32_t flags, Creature* actor = NULL) const;
+		ReturnValue queryAdd(int32_t index, const Thing& thing, uint32_t count,
+				uint32_t flags, Creature* actor = nullptr) const override;
 
-		void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link = LINK_OWNER);
-		void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link = LINK_OWNER);
+		void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link = LINK_OWNER) override;
+		void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t link = LINK_OWNER) override;
 
-		//overrides
-		bool canRemove() const {
+		bool canRemove() const override {
 			return false;
 		}
 
 	private:
-		uint32_t depotId;
+		uint16_t depotId;
 };
 
 #endif

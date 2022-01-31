@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,157 +19,120 @@
 
 #include "otpch.h"
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
-#include <string>
-#include <iostream>
-#include <sstream>
-
 #include "networkmessage.h"
 
 #include "container.h"
 #include "creature.h"
-#include "player.h"
 
-#include "position.h"
-#include "rsa.h"
-
-int32_t NetworkMessage::decodeHeader()
+std::string NetworkMessage::getString(uint16_t stringLen/* = 0*/)
 {
-	int32_t size = (int32_t)(m_RealBuf[0] | m_RealBuf[1] << 8);
-	m_MsgSize = size;
-	return size;
-}
-
-/******************************************************************************/
-std::string NetworkMessage::GetString(uint16_t stringlen/* = 0*/)
-{
-	if (stringlen == 0) {
-		stringlen = GetU16();
+	if (stringLen == 0) {
+		stringLen = get<uint16_t>();
 	}
 
-	if (!canRead(stringlen)) {
+	if (!canRead(stringLen)) {
 		return std::string();
 	}
 
-	char* v = (char*)m_RealBuf + m_ReadPos;
-	m_ReadPos += stringlen;
-	return std::string(v, stringlen);
+	char* v = reinterpret_cast<char*>(buffer) + info.position; //does not break strict aliasing
+	info.position += stringLen;
+	return std::string(v, stringLen);
 }
 
-Position NetworkMessage::GetPosition()
+Position NetworkMessage::getPosition()
 {
 	Position pos;
-	pos.x = GetU16();
-	pos.y = GetU16();
-	pos.z = GetByte();
+	pos.x = get<uint16_t>();
+	pos.y = get<uint16_t>();
+	pos.z = getByte();
 	return pos;
 }
-/******************************************************************************/
 
-void NetworkMessage::AddString(const std::string& value)
+void NetworkMessage::addString(const std::string& value)
 {
-	size_t stringlen = value.length();
-	if (!canAdd(stringlen + 2) || stringlen > 8192) {
+	size_t stringLen = value.length();
+	if (!canAdd(stringLen + 2) || stringLen > 8192) {
 		return;
 	}
 
-	AddU16(stringlen);
-	memcpy(m_MsgBuf + m_ReadPos, value.c_str(), stringlen);
-	m_ReadPos += stringlen;
-	m_MsgSize += stringlen;
+	add<uint16_t>(stringLen);
+	memcpy(buffer + info.position, value.c_str(), stringLen);
+	info.position += stringLen;
+	info.length += stringLen;
 }
 
-void NetworkMessage::AddString(const char* value)
+void NetworkMessage::addDouble(double value, uint8_t precision/* = 2*/)
 {
-	size_t stringlen = strlen(value);
-	if (!canAdd(stringlen + 2) || stringlen > 8192) {
-		return;
-	}
-
-	AddU16(stringlen);
-	memcpy((char*)m_MsgBuf + m_ReadPos, value, stringlen);
-	m_ReadPos += stringlen;
-	m_MsgSize += stringlen;
+	addByte(precision);
+	add<uint32_t>(static_cast<uint32_t>((value * std::pow(static_cast<float>(10), precision)) + std::numeric_limits<int32_t>::max()));
 }
 
-void NetworkMessage::AddDouble(double value, uint8_t precision/* = 2*/)
-{
-	AddByte(precision);
-	AddU32((value * std::pow((float)10, precision)) + INT_MAX);
-}
-
-void NetworkMessage::AddBytes(const char* bytes, size_t size)
+void NetworkMessage::addBytes(const char* bytes, size_t size)
 {
 	if (!canAdd(size) || size > 8192) {
 		return;
 	}
 
-	memcpy(m_MsgBuf + m_ReadPos, bytes, size);
-	m_ReadPos += size;
-	m_MsgSize += size;
+	memcpy(buffer + info.position, bytes, size);
+	info.position += size;
+	info.length += size;
 }
 
-void NetworkMessage::AddPaddingBytes(uint32_t n)
+void NetworkMessage::addPaddingBytes(size_t n)
 {
 	if (!canAdd(n)) {
 		return;
 	}
 
-	memset((void*)&m_MsgBuf[m_ReadPos], 0x33, n);
-	m_MsgSize += n;
+	memset(buffer + info.position, 0x33, n);
+	info.length += n;
 }
 
-void NetworkMessage::AddPosition(const Position& pos)
+void NetworkMessage::addPosition(const Position& pos)
 {
-	AddU16(pos.x);
-	AddU16(pos.y);
-	AddByte(pos.z);
+	add<uint16_t>(pos.x);
+	add<uint16_t>(pos.y);
+	addByte(pos.z);
 }
 
-void NetworkMessage::AddItem(uint16_t id, uint8_t count)
+void NetworkMessage::addItem(uint16_t id, uint8_t count)
 {
 	const ItemType& it = Item::items[id];
 
-	AddU16(it.clientId);
+	add<uint16_t>(it.clientId);
 
-	AddByte(0xFF);    // MARK_UNMARKED
+	addByte(0xFF); // MARK_UNMARKED
 
 	if (it.stackable) {
-		AddByte(count);
+		addByte(count);
 	} else if (it.isSplash() || it.isFluidContainer()) {
-		uint32_t fluidIndex = count % 8;
-		AddByte(fluidMap[fluidIndex]);
+		addByte(fluidMap[count & 7]);
 	}
 
 	if (it.isAnimation) {
-		AddByte(0xFE);    // random phase (0xFF for async)
+		addByte(0xFE); // random phase (0xFF for async)
 	}
 }
 
-void NetworkMessage::AddItem(const Item* item)
+void NetworkMessage::addItem(const Item* item)
 {
 	const ItemType& it = Item::items[item->getID()];
 
-	AddU16(it.clientId);
-	AddByte(0xFF);    // MARK_UNMARKED
+	add<uint16_t>(it.clientId);
+	addByte(0xFF); // MARK_UNMARKED
 
 	if (it.stackable) {
-		AddByte(std::min<uint16_t>(0xFF, item->getSubType()));
+		addByte(std::min<uint16_t>(0xFF, item->getItemCount()));
 	} else if (it.isSplash() || it.isFluidContainer()) {
-		uint32_t fluidIndex = item->getSubType() % 8;
-		AddByte(fluidMap[fluidIndex]);
+		addByte(fluidMap[item->getFluidType() & 7]);
 	}
 
 	if (it.isAnimation) {
-		AddByte(0xFE);    // random phase (0xFF for async)
+		addByte(0xFE); // random phase (0xFF for async)
 	}
 }
 
-void NetworkMessage::AddItemId(uint16_t itemId)
+void NetworkMessage::addItemId(uint16_t itemId)
 {
-	const ItemType& it = Item::items[itemId];
-	AddU16(it.clientId);
+	add<uint16_t>(Item::items[itemId].clientId);
 }

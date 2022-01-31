@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,49 +17,35 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_DATABASE_H__
-#define __OTSERV_DATABASE_H__
-
-#include "definitions.h"
+#ifndef FS_DATABASE_H_A484B0CDFDE542838F506DCE3D40C693
+#define FS_DATABASE_H_A484B0CDFDE542838F506DCE3D40C693
 
 #include <boost/lexical_cast.hpp>
-#include <boost/thread/recursive_mutex.hpp>
 
-#if defined(WIN32) && !defined(_MSC_VER)
 #include <mysql/mysql.h>
-#else
-#include <mysql.h>
-#endif
-
-typedef std::map<const std::string, uint32_t> listNames_t;
 
 class DBResult;
+using DBResult_ptr = std::shared_ptr<DBResult>;
 
 class Database
 {
 	public:
-		/**
-		* Singleton implementation.
-		*
-		* Retruns instance of database handler. Don't create database (or drivers) instances in your code - instead of it use Database::instance(). This method stores static instance of connection class internaly to make sure exacly one instance of connection is created for entire system.
-		*
-		* @return database connection handler singletor
-		*/
-		static Database* getInstance()
-		{
-			static Database instance;
-			return &instance;
-		}
+		Database() = default;
+		~Database();
+
+		// non-copyable
+		Database(const Database&) = delete;
+		Database& operator=(const Database&) = delete;
 
 		/**
-		* Database connected.
-		*
-		* Returns whether or not the database is connected.
-		*
-		* @return whether or not the database is connected.
-		*/
-		bool isConnected() const {
-			return m_connected;
+		 * Singleton implementation.
+		 *
+		 * @return database connection handler singleton
+		 */
+		static Database& getInstance()
+		{
+			static Database instance;
+			return instance;
 		}
 
 		/**
@@ -70,94 +56,82 @@ class Database
 		bool connect();
 
 		/**
-		* Executes command.
-		*
-		* Executes query which doesn't generates results (eg. INSERT, UPDATE, DELETE...).
-		*
-		* @param std::string query command
-		* @return true on success, false on error
-		*/
+		 * Executes command.
+		 *
+		 * Executes query which doesn't generates results (eg. INSERT, UPDATE, DELETE...).
+		 *
+		 * @param query command
+		 * @return true on success, false on error
+		 */
 		bool executeQuery(const std::string& query);
 
 		/**
-		* Queries database.
-		*
-		* Executes query which generates results (mostly SELECT).
-		*
-		* @param std::string query
-		* @return results object (null on error)
-		*/
-		DBResult* storeQuery(const std::string& query);
+		 * Queries database.
+		 *
+		 * Executes query which generates results (mostly SELECT).
+		 *
+		 * @return results object (nullptr on error)
+		 */
+		DBResult_ptr storeQuery(const std::string& query);
 
 		/**
-		* Escapes string for query.
-		*
-		* Prepares string to fit SQL queries including quoting it.
-		*
-		* @param std::string string to be escaped
-		* @return quoted string
-		*/
+		 * Escapes string for query.
+		 *
+		 * Prepares string to fit SQL queries including quoting it.
+		 *
+		 * @param s string to be escaped
+		 * @return quoted string
+		 */
 		std::string escapeString(const std::string& s) const;
 
 		/**
-		* Escapes binary stream for query.
-		*
-		* Prepares binary stream to fit SQL queries.
-		*
-		* @param char* binary stream
-		* @param long stream length
-		* @return quoted string
-		*/
+		 * Escapes binary stream for query.
+		 *
+		 * Prepares binary stream to fit SQL queries.
+		 *
+		 * @param s binary stream
+		 * @param length stream length
+		 * @return quoted string
+		 */
 		std::string escapeBlob(const char* s, uint32_t length) const;
-
-		/**
-		* Resource freeing.
-		*
-		* @param DBResult* resource to be freed
-		*/
-		void freeResult(DBResult* res);
 
 		/**
 		 * Retrieve id of last inserted row
 		 *
 		 * @return id on success, 0 if last query did not result on any rows with auto_increment keys
 		 */
-		uint64_t getLastInsertId() {
-			return static_cast<uint64_t>(mysql_insert_id(m_handle));
+		uint64_t getLastInsertId() const {
+			return static_cast<uint64_t>(mysql_insert_id(handle));
 		}
 
 		/**
-		* Get database engine version
-		*
-		* @return the database engine version
-		*/
-		const char* getClientVersion() const {
+		 * Get database engine version
+		 *
+		 * @return the database engine version
+		 */
+		static const char* getClientVersion() {
 			return mysql_get_client_info();
 		}
 
-	protected:
-		/**
-		* Transaction related methods.
-		*
-		* Methods for starting, commiting and rolling back transaction. Each of the returns boolean value.
-		*
-		* @return true on success, false on error
-		*/
-		bool beginTransaction();
-		bool rollback();
-		bool commit(); 
+		uint64_t getMaxPacketSize() const {
+			return maxPacketSize;
+		}
 
 	private:
-		Database();
-		~Database();
+		/**
+		 * Transaction related methods.
+		 *
+		 * Methods for starting, commiting and rolling back transaction. Each of the returns boolean value.
+		 *
+		 * @return true on success, false on error
+		 */
+		bool beginTransaction();
+		bool rollback();
+		bool commit();
 
-		DBResult* verifyResult(DBResult* result);
-
-		MYSQL* m_handle;
-
-		boost::recursive_mutex database_lock;
-
-		bool m_connected;
+		MYSQL* handle = nullptr;
+		std::recursive_mutex databaseLock;
+		uint64_t maxPacketSize = 1048576;
 
 	friend class DBTransaction;
 };
@@ -165,43 +139,46 @@ class Database
 class DBResult
 {
 	public:
+		explicit DBResult(MYSQL_RES* res);
+		~DBResult();
+
+		// non-copyable
+		DBResult(const DBResult&) = delete;
+		DBResult& operator=(const DBResult&) = delete;
+
 		template<typename T>
 		T getNumber(const std::string& s) const
 		{
-			listNames_t::const_iterator it = m_listNames.find(s);
-			if (it == m_listNames.end()) {
-				std::cout << "[Error - DBResult::getData] Column '" << s << "' does not exist in result set." << std::endl;
+			auto it = listNames.find(s);
+			if (it == listNames.end()) {
+				std::cout << "[Error - DBResult::getNumber] Column '" << s << "' doesn't exist in the result set" << std::endl;
 				return static_cast<T>(0);
 			}
 
-			if (m_row[it->second] == NULL) {
+			if (row[it->second] == nullptr) {
 				return static_cast<T>(0);
 			}
 
 			T data;
 			try {
-				data = boost::lexical_cast<T>(m_row[it->second]);
+				data = boost::lexical_cast<T>(row[it->second]);
 			} catch (boost::bad_lexical_cast&) {
 				data = 0;
 			}
 			return data;
 		}
 
-		int32_t getDataInt(const std::string& s) const;
-		std::string getDataString(const std::string& s) const;
-		const char* getDataStream(const std::string& s, unsigned long& size) const;
+		std::string getString(const std::string& s) const;
+		const char* getStream(const std::string& s, unsigned long& size) const;
 
+		bool hasNext() const;
 		bool next();
 
-	protected:
-		DBResult(MYSQL_RES* res);
-		~DBResult();
-
 	private:
-		MYSQL_RES* m_handle;
-		MYSQL_ROW m_row;
+		MYSQL_RES* handle;
+		MYSQL_ROW row;
 
-		listNames_t m_listNames;
+		std::map<std::string, size_t> listNames;
 
 	friend class Database;
 };
@@ -212,74 +189,54 @@ class DBResult
 class DBInsert
 {
 	public:
-		DBInsert();
-		~DBInsert() {}
-
-		/**
-		* Sets query prototype.
-		*
-		* @param std::string& INSERT query
-		*/
-		void setQuery(const std::string& query);
-
-		/**
-		* Adds new row to INSERT statement
-		* @param std::string& row data
-		*/
+		explicit DBInsert(std::string query);
 		bool addRow(const std::string& row);
-
-		/**
-		* Allows to use addRow() with stringstream as parameter.
-		*/
 		bool addRow(std::ostringstream& row);
-
-		/**
-		* Executes current buffer.
-		*/
 		bool execute();
 
-	protected:
-		std::string m_query;
-		std::string m_buf;
-
-		uint32_t m_rows;
+	private:
+		std::string query;
+		std::string values;
+		size_t length;
 };
 
 class DBTransaction
 {
 	public:
-		DBTransaction() {
-			m_state = STATE_NO_START;
-		}
+		constexpr DBTransaction() = default;
 
 		~DBTransaction() {
-			if (m_state == STATE_START) {
-				Database::getInstance()->rollback();
+			if (state == STATE_START) {
+				Database::getInstance().rollback();
 			}
 		}
 
+		// non-copyable
+		DBTransaction(const DBTransaction&) = delete;
+		DBTransaction& operator=(const DBTransaction&) = delete;
+
 		bool begin() {
-			m_state = STATE_START;
-			return Database::getInstance()->beginTransaction();
+			state = STATE_START;
+			return Database::getInstance().beginTransaction();
 		}
 
 		bool commit() {
-			if (m_state != STATE_START) {
+			if (state != STATE_START) {
 				return false;
 			}
 
-			m_state = STEATE_COMMIT;
-			return Database::getInstance()->commit();
+			state = STATE_COMMIT;
+			return Database::getInstance().commit();
 		}
 
 	private:
 		enum TransactionStates_t {
 			STATE_NO_START,
 			STATE_START,
-			STEATE_COMMIT
+			STATE_COMMIT,
 		};
 
-		TransactionStates_t m_state;
+		TransactionStates_t state = STATE_NO_START;
 };
 
 #endif

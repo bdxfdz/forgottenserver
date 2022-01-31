@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,18 +17,22 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __SCRIPTMANAGER_H__
-#define __SCRIPTMANAGER_H__
+#ifndef FS_SCRIPTMANAGER_H_F9428B7803A44FB88EB1A915CFD37F8B
+#define FS_SCRIPTMANAGER_H_F9428B7803A44FB88EB1A915CFD37F8B
 
 class ScriptingManager
 {
 	public:
-		ScriptingManager();
+		ScriptingManager() = default;
 		~ScriptingManager();
 
-		static ScriptingManager* getInstance() {
+		// non-copyable
+		ScriptingManager(const ScriptingManager&) = delete;
+		ScriptingManager& operator=(const ScriptingManager&) = delete;
+
+		static ScriptingManager& getInstance() {
 			static ScriptingManager instance;
-			return &instance;
+			return instance;
 		}
 
 		bool loadScriptSystems();

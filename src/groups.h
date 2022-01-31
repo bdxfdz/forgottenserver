@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,32 +17,22 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __GROUPS_H__
-#define __GROUPS_H__
-
-#include <cstdint>
-#include <string>
-#include <vector>
+#ifndef FS_GROUPS_H_EE39438337D148E1983FB79D936DD8F3
+#define FS_GROUPS_H_EE39438337D148E1983FB79D936DD8F3
 
 struct Group {
 	std::string name;
 	uint64_t flags;
-	uint32_t id;
 	uint32_t maxDepotItems;
 	uint32_t maxVipEntries;
+	uint16_t id;
 	bool access;
 };
 
 class Groups {
 	public:
-		static Groups* getInstance() {
-			static Groups instance;
-			return &instance;
-		}
-
 		bool load();
-
-		Group* getGroup(uint32_t id);
+		Group* getGroup(uint16_t id);
 
 	private:
 		std::vector<Group> groups;

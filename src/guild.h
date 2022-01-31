@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,30 +17,24 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __GUILD_H__
-#define __GUILD_H__
+#ifndef FS_GUILD_H_C00F0A1D732E4BA88FF62ACBE74D76BC
+#define FS_GUILD_H_C00F0A1D732E4BA88FF62ACBE74D76BC
 
-#include "player.h"
-
-typedef std::vector<Player*> PlayerVector;
+class Player;
 
 struct GuildRank {
 	uint32_t id;
 	std::string name;
 	uint8_t level;
 
-	GuildRank(uint32_t id, const std::string& name, uint8_t level) {
-		this->id = id;
-		this->name = name;
-		this->level = level;
-	}
+	GuildRank(uint32_t id, std::string name, uint8_t level) :
+		id(id), name(std::move(name)), level(level) {}
 };
 
 class Guild
 {
 	public:
-		Guild(uint32_t id, const std::string& name);
-		~Guild() {}
+		Guild(uint32_t id, std::string name) : name(std::move(name)), id(id) {}
 
 		void addMember(Player* player);
 		void removeMember(Player* player);
@@ -51,13 +45,9 @@ class Guild
 		const std::string& getName() const {
 			return name;
 		}
-		const PlayerVector& getMembersOnline() const {
+		const std::list<Player*>& getMembersOnline() const {
 			return membersOnline;
 		}
-		size_t getMembersOnlineCount() const {
-			return membersOnline.size();
-		}
-
 		uint32_t getMemberCount() const {
 			return memberCount;
 		}
@@ -65,9 +55,13 @@ class Guild
 			memberCount = count;
 		}
 
-		GuildRank* getRankById(uint32_t id);
-		GuildRank* getRankByLevel(uint8_t level);
-		void addRank(uint32_t id, const std::string& name, uint8_t level);
+		const std::vector<GuildRank>& getRanks() const {
+			return ranks;
+		}
+		GuildRank* getRankById(uint32_t rankId);
+		const GuildRank* getRankByName(const std::string& name) const;
+		const GuildRank* getRankByLevel(uint8_t level) const;
+		void addRank(uint32_t rankId, const std::string& rankName, uint8_t level);
 
 		const std::string& getMotd() const {
 			return motd;
@@ -77,12 +71,12 @@ class Guild
 		}
 
 	private:
-		PlayerVector membersOnline;
+		std::list<Player*> membersOnline;
 		std::vector<GuildRank> ranks;
 		std::string name;
 		std::string motd;
 		uint32_t id;
-		uint32_t memberCount;
+		uint32_t memberCount = 0;
 };
 
 #endif

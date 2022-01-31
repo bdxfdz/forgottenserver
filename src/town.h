@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,22 +17,15 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __TOWN_H__
-#define __TOWN_H__
-
-#include <string>
-#include <list>
-#include <map>
+#ifndef FS_TOWN_H_3BE21D2293B44AA4A3D22D25BE1B9350
+#define FS_TOWN_H_3BE21D2293B44AA4A3D22D25BE1B9350
 
 #include "position.h"
-#include "definitions.h"
 
 class Town
 {
 	public:
-		Town(uint32_t _id)
-			: id(_id) {}
-		~Town() {}
+		explicit Town(uint32_t id) : id(id) {}
 
 		const Position& getTemplePosition() const {
 			return templePosition;
@@ -41,11 +34,11 @@ class Town
 			return name;
 		}
 
-		void setTemplePos(const Position& pos) {
+		void setTemplePos(Position pos) {
 			templePosition = pos;
 		}
-		void setName(const std::string& _name) {
-			name = _name;
+		void setName(std::string name) {
+			this->name = std::move(name);
 		}
 		uint32_t getID() const {
 			return id;
@@ -57,30 +50,24 @@ class Town
 		Position templePosition;
 };
 
-typedef std::map<uint32_t, Town*> TownMap;
+using TownMap = std::map<uint32_t, Town*>;
 
 class Towns
 {
 	public:
+		Towns() = default;
 		~Towns() {
-			for (TownMap::iterator it = townMap.begin(); it != townMap.end(); ++it) {
-				delete it->second;
+			for (const auto& it : townMap) {
+				delete it.second;
 			}
 		}
 
-		static Towns& getInstance() {
-			static Towns singleton;
-			return singleton;
-		}
+		// non-copyable
+		Towns(const Towns&) = delete;
+		Towns& operator=(const Towns&) = delete;
 
 		bool addTown(uint32_t townId, Town* town) {
-			TownMap::iterator it = townMap.find(townId);
-			if (it != townMap.end()) {
-				return false;
-			}
-
-			townMap[townId] = town;
-			return true;
+			return townMap.emplace(townId, town).second;
 		}
 
 		Town* getTown(const std::string& townName) const {
@@ -89,15 +76,19 @@ class Towns
 					return it.second;
 				}
 			}
-			return NULL;
+			return nullptr;
 		}
 
 		Town* getTown(uint32_t townId) const {
 			auto it = townMap.find(townId);
 			if (it == townMap.end()) {
-				return NULL;
+				return nullptr;
 			}
 			return it->second;
+		}
+
+		const TownMap& getTowns() const {
+			return townMap;
 		}
 
 	private:

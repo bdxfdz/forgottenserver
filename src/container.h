@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,11 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_CONTAINER_H__
-#define __OTSERV_CONTAINER_H__
+#ifndef FS_CONTAINER_H_5590165FD8A2451B98D71F13CD3ED8DC
+#define FS_CONTAINER_H_5590165FD8A2451B98D71F13CD3ED8DC
 
 #include <queue>
 
-#include "definitions.h"
 #include "cylinder.h"
 #include "item.h"
 
@@ -33,24 +32,16 @@ class DepotLocker;
 class ContainerIterator
 {
 	public:
-		ContainerIterator();
-		ContainerIterator(const ContainerIterator& rhs);
-		~ContainerIterator();
+		bool hasNext() const {
+			return !over.empty();
+		}
 
-		ContainerIterator& operator=(const ContainerIterator& rhs);
-		bool operator==(const ContainerIterator& rhs);
-		bool operator!=(const ContainerIterator& rhs);
-		ContainerIterator& operator++();
-		ContainerIterator operator++(int);
+		void advance();
 		Item* operator*();
-		Item* operator->();
 
-	protected:
-		ContainerIterator(Container* super);
-
-		Container* super;
-		std::queue<Container*> over;
-		ItemDeque::iterator cur;
+	private:
+		std::list<const Container*> over;
+		ItemDeque::const_iterator cur;
 
 		friend class Container;
 };
@@ -58,38 +49,37 @@ class ContainerIterator
 class Container : public Item, public Cylinder
 {
 	public:
-		Container(uint16_t _type);
-		Container(Tile* tile);
-		virtual ~Container();
-		virtual Item* clone() const;
+		explicit Container(uint16_t type);
+		Container(uint16_t type, uint16_t size, bool unlocked = true, bool pagination = false);
+		explicit Container(Tile* tile);
+		~Container();
 
-		virtual Container* getContainer() {
+		// non-copyable
+		Container(const Container&) = delete;
+		Container& operator=(const Container&) = delete;
+
+		Item* clone() const override final;
+
+		Container* getContainer() override final {
 			return this;
 		}
-		virtual const Container* getContainer() const {
+		const Container* getContainer() const override final {
 			return this;
-		}
-
-		virtual DepotChest* getDepotChest() {
-			return NULL;
-		}
-		virtual const DepotChest* getDepotChest() const {
-			return NULL;
 		}
 
 		virtual DepotLocker* getDepotLocker() {
-			return NULL;
+			return nullptr;
 		}
 		virtual const DepotLocker* getDepotLocker() const {
-			return NULL;
+			return nullptr;
 		}
 
-		Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream);
-		bool unserializeItemNode(FileLoader& f, NODE node, PropStream& propStream);
+		Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
+		bool unserializeItemNode(OTB::Loader& loader, const OTB::Node& node, PropStream& propStream) override;
 		std::string getContentDescription() const;
 
-		uint32_t size() const {
-			return (uint32_t)itemlist.size();
+		size_t size() const {
+			return itemlist.size();
 		}
 		bool empty() const {
 			return itemlist.empty();
@@ -98,16 +88,10 @@ class Container : public Item, public Cylinder
 			return maxSize;
 		}
 
-		ContainerIterator begin();
-		ContainerIterator end();
-		ContainerIterator begin() const;
-		ContainerIterator end() const;
+		ContainerIterator iterator() const;
 
-		ItemDeque::const_iterator getItems() const {
-			return itemlist.begin();
-		}
-		ItemDeque::const_iterator getEnd() const {
-			return itemlist.end();
+		const ItemDeque& getItemList() const {
+			return itemlist;
 		}
 
 		ItemDeque::const_reverse_iterator getReversedItems() const {
@@ -119,70 +103,70 @@ class Container : public Item, public Cylinder
 
 		bool hasParent() const;
 		void addItem(Item* item);
-		Item* getItemByIndex(uint32_t index) const;
+		Item* getItemByIndex(size_t index) const;
 		bool isHoldingItem(const Item* item) const;
 
 		uint32_t getItemHoldingCount() const;
-		virtual double getWeight() const;
+		uint32_t getWeight() const override final;
 
 		bool isUnlocked() const {
 			return unlocked;
 		}
-		bool hasPages() const {
-			return pages;
+		bool hasPagination() const {
+			return pagination;
 		}
 
 		//cylinder implementations
-		virtual ReturnValue __queryAdd(int32_t index, const Thing* thing, uint32_t count,
-		                               uint32_t flags, Creature* actor = NULL) const;
-		virtual ReturnValue __queryMaxCount(int32_t index, const Thing* thing, uint32_t count, uint32_t& maxQueryCount,
-		                                    uint32_t flags) const;
-		virtual ReturnValue __queryRemove(const Thing* thing, uint32_t count, uint32_t flags) const;
-		virtual Cylinder* __queryDestination(int32_t& index, const Thing* thing, Item** destItem,
-		                                     uint32_t& flags);
+		virtual ReturnValue queryAdd(int32_t index, const Thing& thing, uint32_t count,
+				uint32_t flags, Creature* actor = nullptr) const override;
+		ReturnValue queryMaxCount(int32_t index, const Thing& thing, uint32_t count, uint32_t& maxQueryCount,
+				uint32_t flags) const override final;
+		ReturnValue queryRemove(const Thing& thing, uint32_t count, uint32_t flags) const override final;
+		Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem,
+				uint32_t& flags) override final;
 
-		virtual void __addThing(Thing* thing);
-		virtual void __addThing(int32_t index, Thing* thing);
-		virtual void __addThingBack(Thing* thing);
+		void addThing(Thing* thing) override final;
+		void addThing(int32_t index, Thing* thing) override final;
+		void addItemBack(Item* item);
 
-		virtual void __updateThing(Thing* thing, uint16_t itemId, uint32_t count);
-		virtual void __replaceThing(uint32_t index, Thing* thing);
+		void updateThing(Thing* thing, uint16_t itemId, uint32_t count) override final;
+		void replaceThing(uint32_t index, Thing* thing) override final;
 
-		virtual void __removeThing(Thing* thing, uint32_t count);
+		void removeThing(Thing* thing, uint32_t count) override final;
 
-		virtual int32_t __getIndexOfThing(const Thing* thing) const;
-		virtual int32_t __getFirstIndex() const;
-		virtual int32_t __getLastIndex() const;
-		virtual uint32_t __getItemTypeCount(uint16_t itemId, int32_t subType = -1) const;
-		virtual std::map<uint32_t, uint32_t>& __getAllItemTypeCount(std::map<uint32_t, uint32_t>& countMap) const;
-		virtual Thing* __getThing(uint32_t index) const;
+		int32_t getThingIndex(const Thing* thing) const override final;
+		size_t getFirstIndex() const override final;
+		size_t getLastIndex() const override final;
+		uint32_t getItemTypeCount(uint16_t itemId, int32_t subType = -1) const override final;
+		std::map<uint32_t, uint32_t>& getAllItemTypeCount(std::map<uint32_t, uint32_t>& countMap) const override final;
+		Thing* getThing(size_t index) const override final;
 
-		virtual void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link = LINK_OWNER);
-		virtual void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link = LINK_OWNER);
+		void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link = LINK_OWNER) override;
+		void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t link = LINK_OWNER) override;
 
-		virtual void __internalAddThing(Thing* thing);
-		virtual void __internalAddThing(uint32_t index, Thing* thing);
-		virtual void __startDecaying();
-
-	private:
-		void onAddContainerItem(Item* item);
-		void onUpdateContainerItem(uint32_t index, Item* oldItem, const ItemType& oldType,
-		                           Item* newItem, const ItemType& newType);
-		void onRemoveContainerItem(uint32_t index, Item* item);
-
-		Container* getParentContainer();
-		void updateItemWeight(double diff);
+		void internalAddThing(Thing* thing) override final;
+		void internalAddThing(uint32_t index, Thing* thing) override final;
+		void startDecaying() override final;
 
 	protected:
+		ItemDeque itemlist;
+
+	private:
 		std::ostringstream& getContentDescription(std::ostringstream& os) const;
 
 		uint32_t maxSize;
-		double totalWeight;
-		ItemDeque itemlist;
-		uint32_t serializationCount;
+		uint32_t totalWeight = 0;
+		uint32_t serializationCount = 0;
 
 		bool unlocked;
-		bool pages;
+		bool pagination;
+
+		void onAddContainerItem(Item* item);
+		void onUpdateContainerItem(uint32_t index, Item* oldItem, Item* newItem);
+		void onRemoveContainerItem(uint32_t index, Item* item);
+
+		Container* getParentContainer();
+		void updateItemWeight(int32_t diff);
 
 		friend class ContainerIterator;
 		friend class IOMapSerialize;

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,9 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_NETWORK_MESSAGE_H__
-#define __OTSERV_NETWORK_MESSAGE_H__
+#ifndef FS_NETWORKMESSAGE_H_B853CFED58D1413A87ACED07B2926E03
+#define FS_NETWORKMESSAGE_H_B853CFED58D1413A87ACED07B2926E03
 
-#include "definitions.h"
 #include "const.h"
 
 class Item;
@@ -32,182 +31,146 @@ class RSA;
 class NetworkMessage
 {
 	public:
-		enum { header_length = 2 };
-		enum { crypto_length = 4 };
-		enum { xtea_multiple = 8 };
-		enum { max_body_length = NETWORKMESSAGE_MAXSIZE - header_length - crypto_length - xtea_multiple };
+		using MsgSize_t = uint16_t;
+		// Headers:
+		// 2 bytes for unencrypted message size
+		// 4 bytes for checksum
+		// 2 bytes for encrypted message size
+		static constexpr MsgSize_t INITIAL_BUFFER_POSITION = 8;
+		enum { HEADER_LENGTH = 2 };
+		enum { CHECKSUM_LENGTH = 4 };
+		enum { XTEA_MULTIPLE = 8 };
+		enum { MAX_BODY_LENGTH = NETWORKMESSAGE_MAXSIZE - HEADER_LENGTH - CHECKSUM_LENGTH - XTEA_MULTIPLE };
+		enum { MAX_PROTOCOL_BODY_LENGTH = MAX_BODY_LENGTH - 10 };
 
-		// constructor/destructor
-		NetworkMessage() {
-			m_MsgBuf = m_RealBuf;
-			Reset();
-		}
-		virtual ~NetworkMessage() {}
+		NetworkMessage() = default;
 
-		// resets the internal buffer to an empty message
-
-	protected:
-		void Reset() {
-			m_overrun = false;
-			m_MsgSize = 0;
-			m_ReadPos = 8;
+		void reset() {
+			info = {};
 		}
 
-	public:
 		// simply read functions for incoming message
-		uint8_t GetByte() {
+		uint8_t getByte() {
 			if (!canRead(1)) {
 				return 0;
 			}
 
-			return m_RealBuf[m_ReadPos++];
+			return buffer[info.position++];
 		}
-		uint16_t GetU16() {
-			if (!canRead(2)) {
+
+		uint8_t getPreviousByte() {
+			return buffer[--info.position];
+		}
+
+		template<typename T>
+		T get() {
+			if (!canRead(sizeof(T))) {
 				return 0;
 			}
 
-			uint16_t v = *(uint16_t*)(m_MsgBuf + m_ReadPos);
-			m_ReadPos += 2;
+			T v;
+			memcpy(&v, buffer + info.position, sizeof(T));
+			info.position += sizeof(T);
 			return v;
 		}
-		uint16_t GetSpriteId() {
-			return GetU16();
-		}
-		uint32_t GetU32() {
-			if (!canRead(4)) {
-				return 0;
-			}
 
-			uint32_t v = *(uint32_t*)(m_MsgBuf + m_ReadPos);
-			m_ReadPos += 4;
-			return v;
-		}
-		uint32_t PeekU32() {
-			if (!canRead(4)) {
-				return 0;
-			}
-
-			uint32_t v = *(uint32_t*)(m_MsgBuf + m_ReadPos);
-			return v;
-		}
-		uint64_t GetU64() {
-			if (!canRead(8)) {
-				return 0;
-			}
-
-			uint64_t v = *(uint64_t*)(m_MsgBuf + m_ReadPos);
-			m_ReadPos += 8;
-			return v;
-		}
-		std::string GetString(uint16_t stringlen = 0);
-		std::string GetRaw() {
-			return GetString(m_MsgSize - m_ReadPos);
-		}
-		Position GetPosition();
+		std::string getString(uint16_t stringLen = 0);
+		Position getPosition();
 
 		// skips count unknown/unused bytes in an incoming message
-		void SkipBytes(int count) {
-			m_ReadPos += count;
+		void skipBytes(int16_t count) {
+			info.position += count;
 		}
 
 		// simply write functions for outgoing message
-		void AddByte(uint8_t  value) {
+		void addByte(uint8_t value) {
 			if (!canAdd(1)) {
 				return;
 			}
 
-			m_RealBuf[m_ReadPos++] = value;
-			m_MsgSize++;
+			buffer[info.position++] = value;
+			info.length++;
 		}
-		void AddU16(uint16_t value) {
-			if (!canAdd(2)) {
+
+		template<typename T>
+		void add(T value) {
+			if (!canAdd(sizeof(T))) {
 				return;
 			}
 
-			*(uint16_t*)(m_MsgBuf + m_ReadPos) = value;
-			m_ReadPos += 2;
-			m_MsgSize += 2;
+			memcpy(buffer + info.position, &value, sizeof(T));
+			info.position += sizeof(T);
+			info.length += sizeof(T);
 		}
-		void AddU32(uint32_t value) {
-			if (!canAdd(4)) {
-				return;
-			}
 
-			*(uint32_t*)(m_MsgBuf + m_ReadPos) = value;
-			m_ReadPos += 4;
-			m_MsgSize += 4;
-		}
-		void AddU64(uint64_t value) {
-			if (!canAdd(8)) {
-				return;
-			}
+		void addBytes(const char* bytes, size_t size);
+		void addPaddingBytes(size_t n);
 
-			*(uint64_t*)(m_MsgBuf + m_ReadPos) = value;
-			m_ReadPos += 8;
-			m_MsgSize += 8;
-		}
-		void AddBytes(const char* bytes, size_t size);
-		void AddPaddingBytes(uint32_t n);
+		void addString(const std::string& value);
 
-		void AddString(const std::string& value);
-		void AddString(const char* value);
-
-		void AddDouble(double value, uint8_t precision = 2);
+		void addDouble(double value, uint8_t precision = 2);
 
 		// write functions for complex types
-		void AddPosition(const Position& pos);
-		void AddItem(uint16_t id, uint8_t count);
-		void AddItem(const Item* item);
-		void AddItemId(uint16_t itemId);
+		void addPosition(const Position& pos);
+		void addItem(uint16_t id, uint8_t count);
+		void addItem(const Item* item);
+		void addItemId(uint16_t itemId);
 
-		int32_t getMessageLength() const {
-			return m_MsgSize;
-		}
-		void setMessageLength(int32_t newSize) {
-			m_MsgSize = newSize;
-		}
-		int32_t getReadPos() const {
-			return m_ReadPos;
-		}
-		void setReadPos(int32_t pos) {
-			m_ReadPos = pos;
+		MsgSize_t getLength() const {
+			return info.length;
 		}
 
-		int32_t decodeHeader();
+		void setLength(MsgSize_t newLength) {
+			info.length = newLength;
+		}
+
+		MsgSize_t getBufferPosition() const {
+			return info.position;
+		}
+
+		uint16_t getLengthHeader() const {
+			return static_cast<uint16_t>(buffer[0] | buffer[1] << 8);
+		}
 
 		bool isOverrun() const {
-			return m_overrun;
+			return info.overrun;
 		}
 
-		uint8_t* getBuffer() const {
-			return m_MsgBuf;
+		uint8_t* getBuffer() {
+			return buffer;
 		}
-		char* getBodyBuffer() {
-			m_ReadPos = 2;
-			return (char*)&m_RealBuf[header_length];
+
+		const uint8_t* getBuffer() const {
+			return buffer;
+		}
+
+		uint8_t* getBodyBuffer() {
+			info.position = 2;
+			return buffer + HEADER_LENGTH;
 		}
 
 	protected:
-		inline bool canAdd(size_t size) const {
-			return (size + m_ReadPos < max_body_length);
+		struct NetworkMessageInfo {
+			MsgSize_t length = 0;
+			MsgSize_t position = INITIAL_BUFFER_POSITION;
+			bool overrun = false;
+		};
+
+		NetworkMessageInfo info;
+		uint8_t buffer[NETWORKMESSAGE_MAXSIZE];
+
+	private:
+		bool canAdd(size_t size) const {
+			return (size + info.position) < MAX_BODY_LENGTH;
 		}
 
-		inline bool canRead(int32_t size) {
-			if ((m_ReadPos + size) > (m_MsgSize + 8) || size >= (NETWORKMESSAGE_MAXSIZE - m_ReadPos)) {
-				m_overrun = true;
+		bool canRead(int32_t size) {
+			if ((info.position + size) > (info.length + 8) || size >= (NETWORKMESSAGE_MAXSIZE - info.position)) {
+				info.overrun = true;
 				return false;
 			}
 			return true;
 		}
-
-		int32_t m_MsgSize;
-		int32_t m_ReadPos;
-
-		bool m_overrun;
-
-		uint8_t m_RealBuf[NETWORKMESSAGE_MAXSIZE];
-		uint8_t* m_MsgBuf;
 };
 
 #endif // #ifndef __NETWORK_MESSAGE_H__

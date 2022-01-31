@@ -1,56 +1,29 @@
-function onSay(cid, words, param)
-	if isPlayer(cid) == TRUE and param ~= "" and getPlayerAccess(cid) > 0 then
-		local position = getCreaturePosition(cid)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y - 4, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y - 3, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y - 2, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y - 1, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y + 1, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y + 2, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y + 3, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y + 4, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y + 5, z = position.z}, param)
-
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y - 4, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y - 3, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y - 2, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y - 1, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y + 1, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y + 2, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y + 3, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y + 4, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 7, y = position.y + 5, z = position.z}, param)
-
-		doSendDistanceShoot(position, {x = position.x - 7, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 6, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 5, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 4, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 3, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 2, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 1, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 1, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 2, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 3, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 4, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 5, y = position.y - 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 6, y = position.y - 5, z = position.z}, param)
-
-		doSendDistanceShoot(position, {x = position.x - 6, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 5, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 4, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 3, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 2, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x - 1, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 1, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 2, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 3, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 4, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 5, y = position.y + 5, z = position.z}, param)
-		doSendDistanceShoot(position, {x = position.x + 6, y = position.y + 5, z = position.z}, param)
+function onSay(player, words, param)
+	if not player:getGroup():getAccess() then
+		return true
 	end
+
+	local effect = tonumber(param)
+	local position = player:getPosition()
+	local toPositionLow = {z = position.z}
+	local toPositionHigh = {z = position.z}
+
+	toPositionLow.x = position.x - 7
+	toPositionHigh.x = position.x + 7
+	for i = -5, 5 do
+		toPositionLow.y = position.y + i
+		toPositionHigh.y = toPositionLow.y
+		position:sendDistanceEffect(toPositionLow, effect)
+		position:sendDistanceEffect(toPositionHigh, effect)
+	end
+
+	toPositionLow.y = position.y - 5
+	toPositionHigh.y = position.y + 5
+	for i = -6, 6 do
+		toPositionLow.x = position.x + i
+		toPositionHigh.x = toPositionLow.x
+		position:sendDistanceEffect(toPositionLow, effect)
+		position:sendDistanceEffect(toPositionHigh, effect)
+	end
+	return false
 end

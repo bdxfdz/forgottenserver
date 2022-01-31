@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_MAP_H__
-#define __OTSERV_MAP_H__
-
-#include <queue>
-#include <bitset>
-#include <map>
+#ifndef FS_MAP_H_E3953D57C058461F856F5221D359DAFA
+#define FS_MAP_H_E3953D57C058461F856F5221D359DAFA
 
 #include "position.h"
 #include "item.h"
@@ -30,6 +26,9 @@
 
 #include "tools.h"
 #include "tile.h"
+#include "town.h"
+#include "house.h"
+#include "spawn.h"
 
 class Creature;
 class Player;
@@ -37,67 +36,58 @@ class Game;
 class Tile;
 class Map;
 
-#define MAP_MAX_LAYERS 16
+static constexpr int32_t MAP_MAX_LAYERS = 16;
 
 struct FindPathParams;
 struct AStarNode {
-	int32_t x, y;
 	AStarNode* parent;
-	int32_t f, g, h;
+	int_fast32_t f;
+	uint16_t x, y;
 };
 
-#define MAX_NODES 512
-#define GET_NODE_INDEX(a) (a - &nodes[0])
+static constexpr int32_t MAX_NODES = 512;
 
-#define MAP_NORMALWALKCOST 10
-#define MAP_DIAGONALWALKCOST 25
+static constexpr int32_t MAP_NORMALWALKCOST = 10;
+static constexpr int32_t MAP_DIAGONALWALKCOST = 25;
 
 class AStarNodes
 {
 	public:
-		AStarNodes();
-		~AStarNodes() {}
+		AStarNodes(uint32_t x, uint32_t y);
 
-		AStarNode* createOpenNode();
+		AStarNode* createOpenNode(AStarNode* parent, uint32_t x, uint32_t y, int_fast32_t f);
 		AStarNode* getBestNode();
 		void closeNode(AStarNode* node);
 		void openNode(AStarNode* node);
-		uint32_t countClosedNodes();
-		uint32_t countOpenNodes();
-		bool isInList(int32_t x, int32_t y);
-		AStarNode* getNodeInList(int32_t x, int32_t y);
+		int_fast32_t getClosedNodes() const;
+		AStarNode* getNodeByPosition(uint32_t x, uint32_t y);
 
-		int32_t getMapWalkCost(const Creature* creature, AStarNode* node,
-		                       const Tile* neighbourTile, const Position& neighbourPos);
-		static int32_t getTileWalkCost(const Creature* creature, const Tile* tile);
-		int32_t getEstimatedDistance(int32_t x, int32_t y, int32_t xGoal, int32_t yGoal);
+		static int_fast32_t getMapWalkCost(AStarNode* node, const Position& neighborPos);
+		static int_fast32_t getTileWalkCost(const Creature& creature, const Tile* tile);
 
 	private:
 		AStarNode nodes[MAX_NODES];
-		std::bitset<MAX_NODES> openNodes;
-		uint32_t curNode;
+		bool openNodes[MAX_NODES];
+		std::unordered_map<uint32_t, AStarNode*> nodeTable;
+		size_t curNode;
+		int_fast32_t closedNodes;
 };
 
-template<class T> class lessPointer : public std::binary_function<T*, T*, bool>
-{
-	public:
-		bool operator()(T*& t1, T*& t2) {
-			return *t1 < *t2;
-		}
-};
+using SpectatorCache = std::map<Position, SpectatorVec>;
 
-typedef std::unordered_set<Creature*> SpectatorVec;
-typedef std::map<Position, std::shared_ptr<SpectatorVec> > SpectatorCache;
-
-#define FLOOR_BITS 3
-#define FLOOR_SIZE (1 << FLOOR_BITS)
-#define FLOOR_MASK (FLOOR_SIZE - 1)
+static constexpr int32_t FLOOR_BITS = 3;
+static constexpr int32_t FLOOR_SIZE = (1 << FLOOR_BITS);
+static constexpr int32_t FLOOR_MASK = (FLOOR_SIZE - 1);
 
 struct Floor {
-	Floor() : tiles() {}
+	constexpr Floor() = default;
 	~Floor();
 
-	Tile* tiles[FLOOR_SIZE][FLOOR_SIZE];
+	// non-copyable
+	Floor(const Floor&) = delete;
+	Floor& operator=(const Floor&) = delete;
+
+	Tile* tiles[FLOOR_SIZE][FLOOR_SIZE] = {};
 };
 
 class FrozenPathingConditionCall;
@@ -106,50 +96,68 @@ class QTreeLeafNode;
 class QTreeNode
 {
 	public:
-		QTreeNode();
+		constexpr QTreeNode() = default;
 		virtual ~QTreeNode();
 
+		// non-copyable
+		QTreeNode(const QTreeNode&) = delete;
+		QTreeNode& operator=(const QTreeNode&) = delete;
+
 		bool isLeaf() const {
-			return m_isLeaf;
+			return leaf;
 		}
+
 		QTreeLeafNode* getLeaf(uint32_t x, uint32_t y);
-		static QTreeLeafNode* getLeafStatic(QTreeNode* root, uint32_t x, uint32_t y);
+
+		template<typename Leaf, typename Node>
+		static Leaf getLeafStatic(Node node, uint32_t x, uint32_t y)
+		{
+			do {
+				node = node->child[((x & 0x8000) >> 15) | ((y & 0x8000) >> 14)];
+				if (!node) {
+					return nullptr;
+				}
+
+				x <<= 1;
+				y <<= 1;
+			} while (!node->leaf);
+			return static_cast<Leaf>(node);
+		}
+
 		QTreeLeafNode* createLeaf(uint32_t x, uint32_t y, uint32_t level);
 
 	protected:
-		QTreeNode* m_child[4];
+		bool leaf = false;
 
-		bool m_isLeaf;
+	private:
+		QTreeNode* child[4] = {};
 
 		friend class Map;
 };
 
-class QTreeLeafNode : public QTreeNode
+class QTreeLeafNode final : public QTreeNode
 {
 	public:
-		QTreeLeafNode();
-		virtual ~QTreeLeafNode();
+		QTreeLeafNode() { leaf = true; newLeaf = true; }
+		~QTreeLeafNode();
+
+		// non-copyable
+		QTreeLeafNode(const QTreeLeafNode&) = delete;
+		QTreeLeafNode& operator=(const QTreeLeafNode&) = delete;
 
 		Floor* createFloor(uint32_t z);
-		Floor* getFloor(uint16_t z) {
-			return m_array[z];
-		}
-
-		QTreeLeafNode* stepSouth() {
-			return m_leafS;
-		}
-		QTreeLeafNode* stepEast() {
-			return m_leafE;
+		Floor* getFloor(uint8_t z) const {
+			return array[z];
 		}
 
 		void addCreature(Creature* c);
 		void removeCreature(Creature* c);
 
-	protected:
+	private:
 		static bool newLeaf;
-		QTreeLeafNode* m_leafS;
-		QTreeLeafNode* m_leafE;
-		Floor* m_array[MAP_MAX_LAYERS];
+		QTreeLeafNode* leafS = nullptr;
+		QTreeLeafNode* leafE = nullptr;
+		Floor* array[MAP_MAX_LAYERS] = {};
 		CreatureVector creature_list;
 		CreatureVector player_list;
 
@@ -165,63 +173,59 @@ class QTreeLeafNode : public QTreeNode
 class Map
 {
 	public:
-		Map();
-		~Map();
+		static constexpr int32_t maxViewportX = 11; //min value: maxClientViewportX + 1
+		static constexpr int32_t maxViewportY = 11; //min value: maxClientViewportY + 1
+		static constexpr int32_t maxClientViewportX = 8;
+		static constexpr int32_t maxClientViewportY = 6;
 
-		static const int32_t maxViewportX = 11; //min value: maxClientViewportX + 1
-		static const int32_t maxViewportY = 11; //min value: maxClientViewportY + 1
-		static const int32_t maxClientViewportX = 8;
-		static const int32_t maxClientViewportY = 6;
+		uint32_t clean() const;
 
 		/**
 		  * Load a map.
 		  * \returns true if the map was loaded successfully
 		  */
-		bool loadMap(const std::string& identifier);
+		bool loadMap(const std::string& identifier, bool loadHouses);
 
 		/**
 		  * Save a map.
-		  * \param identifier file/database to save to
 		  * \returns true if the map was saved successfully
 		  */
-		bool saveMap();
+		static bool save();
 
 		/**
 		  * Get a single tile.
 		  * \returns A pointer to that tile.
 		  */
-		Tile* getTile(int32_t x, int32_t y, int32_t z);
-		Tile* getTile(const Position& pos);
-
-		uint32_t clean();
-
-		QTreeLeafNode* getLeaf(uint16_t x, uint16_t y) {
-			return root.getLeaf(x, y);
+		Tile* getTile(uint16_t x, uint16_t y, uint8_t z) const;
+		Tile* getTile(const Position& pos) const {
+			return getTile(pos.x, pos.y, pos.z);
 		}
 
 		/**
 		  * Set a single tile.
-		  * \param a tile to set for the position
 		  */
-		void setTile(int32_t _x, int32_t _y, int32_t _z, Tile* newTile);
+		void setTile(uint16_t x, uint16_t y, uint8_t z, Tile* newTile);
 		void setTile(const Position& pos, Tile* newTile) {
 			setTile(pos.x, pos.y, pos.z, newTile);
 		}
 
 		/**
 		  * Place a creature on the map
-		  * \param pos The position to place the creature
+		  * \param centerPos The position to place the creature
 		  * \param creature Creature to place on the map
 		  * \param extendedPos If true, the creature will in first-hand be placed 2 tiles away
 		  * \param forceLogin If true, placing the creature will not fail becase of obstacles (creatures/chests)
 		  */
 		bool placeCreature(const Position& centerPos, Creature* creature, bool extendedPos = false, bool forceLogin = false);
 
-		/**
-		  * Remove a creature from the map.
-		  * \param c Creature pointer to the creature to remove
-		  */
-		bool removeCreature(Creature* c);
+		void moveCreature(Creature& creature, Tile& newTile, bool forceTeleport = false);
+
+		void getSpectators(SpectatorVec& spectators, const Position& centerPos, bool multifloor = false, bool onlyPlayers = false,
+		                   int32_t minRangeX = 0, int32_t maxRangeX = 0,
+		                   int32_t minRangeY = 0, int32_t maxRangeY = 0);
+
+		void clearSpectatorCache();
+		void clearPlayersSpectatorCache();
 
 		/**
 		  * Checks if you can throw an object to that position
@@ -233,7 +237,7 @@ class Map
 		  *	\returns The result if you can throw there or not
 		  */
 		bool canThrowObjectTo(const Position& fromPos, const Position& toPos, bool checkLineOfSight = true,
-		                      int32_t rangex = Map::maxClientViewportX, int32_t rangey = Map::maxClientViewportY);
+		                      int32_t rangex = Map::maxClientViewportX, int32_t rangey = Map::maxClientViewportY) const;
 
 		/**
 		  * Checks if path is clear from fromPos to toPos
@@ -246,61 +250,40 @@ class Map
 		bool isSightClear(const Position& fromPos, const Position& toPos, bool floorCheck) const;
 		bool checkSightLine(const Position& fromPos, const Position& toPos) const;
 
-		const Tile* canWalkTo(const Creature* creature, const Position& pos);
+		const Tile* canWalkTo(const Creature& creature, const Position& pos) const;
 
-		/**
-		  * Get the path to a specific position on the map.
-		  * \param creature The creature that wants a path
-		  * \param destPos The position we want a path calculated to
-		  * \param listDir contains a list of directions to the destination
-		  * \param maxDist Maximum distance from our current position to search, default: -1 (no limit)
-		  * \returns returns true if a path was found
-		  */
-		bool getPathTo(const Creature* creature, const Position& destPos,
-		               std::list<Direction>& listDir, int32_t maxDist = -1);
-
-		bool getPathMatching(const Creature* creature, std::list<Direction>& dirList,
-		                     const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp);
+		bool getPathMatching(const Creature& creature, std::forward_list<Direction>& dirList,
+		                     const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp) const;
 
 		std::map<std::string, Position> waypoints;
 
-	protected:
-		uint32_t mapWidth, mapHeight;
-		std::string spawnfile;
-		std::string housefile;
+		QTreeLeafNode* getQTNode(uint16_t x, uint16_t y) {
+			return QTreeNode::getLeafStatic<QTreeLeafNode*, QTreeNode*>(&root, x, y);
+		}
+
+		Spawns spawns;
+		Towns towns;
+		Houses houses;
+
+	private:
 		SpectatorCache spectatorCache;
 		SpectatorCache playersSpectatorCache;
 
-		// Actually scans the map for spectators
-		void getSpectatorsInternal(SpectatorVec& list, const Position& centerPos,
-		                           int32_t minRangeX, int32_t maxRangeX,
-		                           int32_t minRangeY, int32_t maxRangeY,
-		                           int32_t minRangeZ, int32_t maxRangeZ, bool onlyPlayers);
-
-		// Use this when a custom spectator vector is needed, this support many
-		// more parameters than the heavily cached version below.
-		void getSpectators(SpectatorVec& list, const Position& centerPos, bool multifloor = false, bool onlyPlayers = false,
-		                   int32_t minRangeX = 0, int32_t maxRangeX = 0,
-		                   int32_t minRangeY = 0, int32_t maxRangeY = 0);
-		// The returned SpectatorVec is a temporary and should not be kept around
-		// Take special heed in that the vector will be destroyed if any function
-		// that calls clearSpectatorCache is called.
-		const SpectatorVec& getSpectators(const Position& centerPos);
-
-		void clearSpectatorCache();
-
 		QTreeNode root;
 
-		struct RefreshBlock_t {
-			TileItemVector list;
-			uint64_t lastRefresh;
-		};
+		std::string spawnfile;
+		std::string housefile;
 
-		typedef std::map<Tile*, RefreshBlock_t> TileMap;
-		TileMap refreshTileMap;
+		uint32_t width = 0;
+		uint32_t height = 0;
+
+		// Actually scans the map for spectators
+		void getSpectatorsInternal(SpectatorVec& spectators, const Position& centerPos,
+		                           int32_t minRangeX, int32_t maxRangeX,
+		                           int32_t minRangeY, int32_t maxRangeY,
+		                           int32_t minRangeZ, int32_t maxRangeZ, bool onlyPlayers) const;
 
 		friend class Game;
-
 		friend class IOMap;
 };
 

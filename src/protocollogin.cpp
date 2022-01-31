@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,180 +22,214 @@
 #include "protocollogin.h"
 
 #include "outputmessage.h"
-#include "connection.h"
-#include "rsa.h"
+#include "tasks.h"
 
 #include "configmanager.h"
-#include "tools.h"
 #include "iologindata.h"
 #include "ban.h"
-#include <iomanip>
 #include "game.h"
 
 extern ConfigManager g_config;
-extern IPList serverIPs;
-extern Ban g_bans;
 extern Game g_game;
 
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-uint32_t ProtocolLogin::protocolLoginCount = 0;
-#endif
-
-void ProtocolLogin::disconnectClient(uint8_t error, const char* message)
+void ProtocolLogin::disconnectClient(const std::string& message, uint16_t version)
 {
-	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
+	auto output = OutputMessagePool::getOutputMessage();
 
-	if (output) {
-		output->AddByte(error);
-		output->AddString(message);
-		OutputMessagePool::getInstance()->send(output);
-	}
+	output->addByte(version >= 1076 ? 0x0B : 0x0A);
+	output->addString(message);
+	send(output);
 
-	getConnection()->closeConnection();
+	disconnect();
 }
 
-bool ProtocolLogin::parseFirstPacket(NetworkMessage& msg)
+void ProtocolLogin::getCharacterList(const std::string& accountName, const std::string& password, const std::string& token, uint16_t version)
+{
+	Account account;
+	if (!IOLoginData::loginserverAuthentication(accountName, password, account)) {
+		disconnectClient("Account name or password is not correct.", version);
+		return;
+	}
+
+	uint32_t ticks = time(nullptr) / AUTHENTICATOR_PERIOD;
+
+	auto output = OutputMessagePool::getOutputMessage();
+	if (!account.key.empty()) {
+		if (token.empty() || !(token == generateToken(account.key, ticks) || token == generateToken(account.key, ticks - 1) || token == generateToken(account.key, ticks + 1))) {
+			output->addByte(0x0D);
+			output->addByte(0);
+			send(output);
+			disconnect();
+			return;
+		}
+		output->addByte(0x0C);
+		output->addByte(0);
+	}
+
+	//Update premium days
+	Game::updatePremium(account);
+
+	const std::string& motd = g_config.getString(ConfigManager::MOTD);
+	if (!motd.empty()) {
+		//Add MOTD
+		output->addByte(0x14);
+
+		std::ostringstream ss;
+		ss << g_game.getMotdNum() << "\n" << motd;
+		output->addString(ss.str());
+	}
+
+	//Add session key
+	output->addByte(0x28);
+	output->addString(accountName + "\n" + password + "\n" + token + "\n" + std::to_string(ticks));
+
+	//Add char list
+	output->addByte(0x64);
+
+	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), account.characters.size());
+
+	if (g_config.getBoolean(ConfigManager::ONLINE_OFFLINE_CHARLIST)) {
+		output->addByte(2); // number of worlds
+
+		for (uint8_t i = 0; i < 2; i++) {
+			output->addByte(i); // world id
+			output->addString(i == 0 ? "Offline" : "Online");
+			output->addString(g_config.getString(ConfigManager::IP));
+			output->add<uint16_t>(g_config.getNumber(ConfigManager::GAME_PORT));
+			output->addByte(0);
+		}
+	} else {
+		output->addByte(1); // number of worlds
+		output->addByte(0); // world id
+		output->addString(g_config.getString(ConfigManager::SERVER_NAME));
+		output->addString(g_config.getString(ConfigManager::IP));
+		output->add<uint16_t>(g_config.getNumber(ConfigManager::GAME_PORT));
+		output->addByte(0);
+	}
+
+	output->addByte(size);
+	for (uint8_t i = 0; i < size; i++) {
+		const std::string& character = account.characters[i];
+		if (g_config.getBoolean(ConfigManager::ONLINE_OFFLINE_CHARLIST)) {
+			output->addByte(g_game.getPlayerByName(character) ? 1 : 0);
+		} else {
+			output->addByte(0);
+		}
+		output->addString(character);
+	}
+
+	//Add premium days
+	output->addByte(0);
+	if (g_config.getBoolean(ConfigManager::FREE_PREMIUM)) {
+		output->addByte(1);
+		output->add<uint32_t>(0);
+	} else {
+		output->addByte(account.premiumDays > 0 ? 1 : 0);
+		output->add<uint32_t>(time(nullptr) + (account.premiumDays * 86400));
+	}
+
+	send(output);
+
+	disconnect();
+}
+
+void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 {
 	if (g_game.getGameState() == GAME_STATE_SHUTDOWN) {
-		getConnection()->closeConnection();
-		return false;
+		disconnect();
+		return;
 	}
 
-	uint32_t clientip = getConnection()->getIP();
+	msg.skipBytes(2); // client OS
 
-	/*uint16_t clientos = */
-	msg.GetU16();
-	uint16_t version = msg.GetU16();
-
+	uint16_t version = msg.get<uint16_t>();
 	if (version >= 971) {
-		msg.SkipBytes(17);
+		msg.skipBytes(17);
 	} else {
-		msg.SkipBytes(12);
+		msg.skipBytes(12);
 	}
-
 	/*
 	 * Skipped bytes:
-	 * 4 bytes: protocolVersion (only 971+)
+	 * 4 bytes: protocolVersion
 	 * 12 bytes: dat, spr, pic signatures (4 bytes each)
-	 * 1 byte: 0 (only 971+)
-	*/
+	 * 1 byte: 0
+	 */
 
 	if (version <= 760) {
-		disconnectClient(0x0A, "Only clients with protocol " CLIENT_VERSION_STR " allowed!");
-		return false;
+		std::ostringstream ss;
+		ss << "Only clients with protocol " << CLIENT_VERSION_STR << " allowed!";
+		disconnectClient(ss.str(), version);
+		return;
 	}
 
-	if (!RSA_decrypt(msg)) {
-		getConnection()->closeConnection();
-		return false;
+	if (!Protocol::RSA_decrypt(msg)) {
+		disconnect();
+		return;
 	}
 
-	uint32_t key[4];
-	key[0] = msg.GetU32();
-	key[1] = msg.GetU32();
-	key[2] = msg.GetU32();
-	key[3] = msg.GetU32();
+	xtea::key key;
+	key[0] = msg.get<uint32_t>();
+	key[1] = msg.get<uint32_t>();
+	key[2] = msg.get<uint32_t>();
+	key[3] = msg.get<uint32_t>();
 	enableXTEAEncryption();
-	setXTEAKey(key);
-
-	std::string accountName = msg.GetString();
-	std::string password = msg.GetString();
+	setXTEAKey(std::move(key));
 
 	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
-		disconnectClient(0x0A, "Only clients with protocol " CLIENT_VERSION_STR " allowed!");
-		return false;
+		std::ostringstream ss;
+		ss << "Only clients with protocol " << CLIENT_VERSION_STR << " allowed!";
+		disconnectClient(ss.str(), version);
+		return;
 	}
 
 	if (g_game.getGameState() == GAME_STATE_STARTUP) {
-		disconnectClient(0x0A, "Gameworld is starting up. Please wait.");
-		return false;
+		disconnectClient("Gameworld is starting up. Please wait.", version);
+		return;
 	}
 
 	if (g_game.getGameState() == GAME_STATE_MAINTAIN) {
-		disconnectClient(0x0A, "Gameworld is under maintenance. Please re-connect in a while.");
-		return false;
+		disconnectClient("Gameworld is under maintenance.\nPlease re-connect in a while.", version);
+		return;
 	}
 
 	BanInfo banInfo;
-	if (IOBan::getInstance()->isIpBanned(clientip, banInfo)) {
+	auto connection = getConnection();
+	if (!connection) {
+		return;
+	}
+
+	if (IOBan::isIpBanned(connection->getIP(), banInfo)) {
 		if (banInfo.reason.empty()) {
 			banInfo.reason = "(none)";
 		}
 
 		std::ostringstream ss;
 		ss << "Your IP has been banned until " << formatDateShort(banInfo.expiresAt) << " by " << banInfo.bannedBy << ".\n\nReason specified:\n" << banInfo.reason;
-		disconnectClient(0x0A, ss.str().c_str());
-		return false;
+		disconnectClient(ss.str(), version);
+		return;
 	}
 
-	uint32_t serverip = serverIPs[0].first;
-	for (uint32_t i = 0; i < serverIPs.size(); i++) {
-		if ((serverIPs[i].first & serverIPs[i].second) == (clientip & serverIPs[i].second)) {
-			serverip = serverIPs[i].first;
-			break;
-		}
-	}
-
+	std::string accountName = msg.getString();
 	if (accountName.empty()) {
-		disconnectClient(0x0A, "Invalid account name.");
-		return false;
+		disconnectClient("Invalid account name.", version);
+		return;
 	}
 
-	Account account;
-	if (!IOLoginData::getInstance()->loginserverAuthentication(accountName, password, account)) {
-		disconnectClient(0x0A, "Account name or password is not correct.");
-		return false;
+	std::string password = msg.getString();
+	if (password.empty()) {
+		disconnectClient("Invalid password.", version);
+		return;
 	}
 
-	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
-	if (output) {
-		//Update premium days
-		g_game.updatePremium(account);
-
-		//Add MOTD
-		output->AddByte(0x14);
-
-		std::ostringstream ss;
-		ss << g_game.getMotdNum() << "\n" << g_config.getString(ConfigManager::MOTD);
-		output->AddString(ss.str());
-
-		//Add char list
-		output->AddByte(0x64);
-		output->AddByte((uint8_t)account.charList.size());
-
-		for (std::list<std::string>::iterator it = account.charList.begin(), end = account.charList.end(); it != end; ++it) {
-			output->AddString(*it);
-
-			if (g_config.getBoolean(ConfigManager::ON_OR_OFF_CHARLIST)) {
-				if (g_game.getPlayerByName(*it)) {
-					output->AddString("Online");
-				} else {
-					output->AddString("Offline");
-				}
-			} else {
-				output->AddString(g_config.getString(ConfigManager::SERVER_NAME));
-			}
-
-			output->AddU32(serverip);
-			output->AddU16(g_config.getNumber(ConfigManager::GAME_PORT));
-			output->AddByte(0x00);
-		}
-
-		//Add premium days
-		if (g_config.getBoolean(ConfigManager::FREE_PREMIUM)) {
-			output->AddU16(0xFFFF);    //client displays free premium
-		} else {
-			output->AddU16(account.premiumDays);
-		}
-
-		OutputMessagePool::getInstance()->send(output);
+	// read authenticator token and stay logged in flag from last 128 bytes
+	msg.skipBytes((msg.getLength() - 128) - msg.getBufferPosition());
+	if (!Protocol::RSA_decrypt(msg)) {
+		disconnectClient("Invalid authentification token.", version);
+		return;
 	}
 
-	getConnection()->closeConnection();
-	return true;
-}
+	std::string authToken = msg.getString();
 
-void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
-{
-	parseFirstPacket(msg);
+	auto thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this());
+	g_dispatcher.addTask(createTask(std::bind(&ProtocolLogin::getCharacterList, thisPtr, accountName, password, authToken, version)));
 }

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,39 +22,51 @@
 #include "inbox.h"
 #include "tools.h"
 
-Inbox::Inbox(uint16_t _type) :
-	Container(_type)
-{
-	maxSize = 30;
-}
+Inbox::Inbox(uint16_t type) : Container(type, 30, false, true) {}
 
-Inbox::~Inbox()
+ReturnValue Inbox::queryAdd(int32_t, const Thing& thing, uint32_t,
+		uint32_t flags, Creature*) const
 {
-	//
-}
-
-ReturnValue Inbox::__queryAdd(int32_t index, const Thing* thing, uint32_t count,
-                              uint32_t flags, Creature* actor/* = NULL*/) const
-{
-	bool skipLimit = hasBitSet(FLAG_NOLIMIT, flags);
-
-	if (!skipLimit) {
-		return RET_CONTAINERNOTENOUGHROOM;
+	if (!hasBitSet(FLAG_NOLIMIT, flags)) {
+		return RETURNVALUE_CONTAINERNOTENOUGHROOM;
 	}
 
-	return Container::__queryAdd(index, thing, count, flags, actor);
+	const Item* item = thing.getItem();
+	if (!item) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+
+	if (item == this) {
+		return RETURNVALUE_THISISIMPOSSIBLE;
+	}
+
+	if (!item->isPickupable()) {
+		return RETURNVALUE_CANNOTPICKUP;
+	}
+
+	return RETURNVALUE_NOERROR;
 }
 
-void Inbox::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link /*= LINK_OWNER*/)
+void Inbox::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)
 {
-	if (getParent() != NULL) {
-		getParent()->postAddNotification(thing, oldParent, index, LINK_PARENT);
+	Cylinder* parent = getParent();
+	if (parent != nullptr) {
+		parent->postAddNotification(thing, oldParent, index, LINK_PARENT);
 	}
 }
 
-void Inbox::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link /*= LINK_OWNER*/)
+void Inbox::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t)
 {
-	if (getParent() != NULL) {
-		getParent()->postRemoveNotification(thing, newParent, index, isCompleteRemoval, LINK_PARENT);
+	Cylinder* parent = getParent();
+	if (parent != nullptr) {
+		parent->postRemoveNotification(thing, newParent, index, LINK_PARENT);
 	}
+}
+
+Cylinder* Inbox::getParent() const
+{
+	if (parent) {
+		return parent->getParent();
+	}
+	return nullptr;
 }

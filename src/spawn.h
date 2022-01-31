@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,68 +17,35 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_SPAWN_H__
-#define __OTSERV_SPAWN_H__
+#ifndef FS_SPAWN_H_1A86089E080846A9AE53ED12E7AE863B
+#define FS_SPAWN_H_1A86089E080846A9AE53ED12E7AE863B
 
 #include "tile.h"
 #include "position.h"
-#include "monster.h"
 
-#include <vector>
-#include <map>
-
-class Spawn;
-typedef std::list<Spawn*> SpawnList;
-
-class Spawns
-{
-	private:
-		Spawns();
-
-	public:
-		static Spawns* getInstance() {
-			static Spawns instance;
-			return &instance;
-		}
-
-		bool isInZone(const Position& centerPos, int32_t radius, const Position& pos);
-
-		~Spawns();
-
-		bool loadFromXml(const std::string& _filename);
-		void startup();
-		void clear();
-
-		bool isLoaded() const {
-			return loaded;
-		}
-		bool isStarted() const {
-			return started;
-		}
-
-	private:
-		typedef std::list<Npc*> NpcList;
-		NpcList npcList;
-		SpawnList spawnList;
-		bool loaded, started;
-		std::string filename;
-};
+class Monster;
+class MonsterType;
+class Npc;
 
 struct spawnBlock_t {
-	MonsterType* mType;
-	Direction direction;
 	Position pos;
-	uint32_t interval;
+	MonsterType* mType;
 	int64_t lastSpawn;
+	uint32_t interval;
+	Direction direction;
 };
 
 class Spawn
 {
 	public:
-		Spawn(const Position& _pos, int32_t _radius);
+		Spawn(Position pos, int32_t radius) : centerPos(std::move(pos)), radius(radius) {}
 		~Spawn();
 
-		bool addMonster(const std::string& _name, const Position& _pos, Direction _dir, uint32_t _interval);
+		// non-copyable
+		Spawn(const Spawn&) = delete;
+		Spawn& operator=(const Spawn&) = delete;
+
+		bool addMonster(const std::string& name, const Position& pos, Direction dir, uint32_t interval);
 		void removeMonster(Monster* monster);
 
 		uint32_t getInterval() const {
@@ -93,24 +60,44 @@ class Spawn
 		void cleanup();
 
 	private:
+		//map of the spawned creatures
+		using SpawnedMap = std::multimap<uint32_t, Monster*>;
+		using spawned_pair = SpawnedMap::value_type;
+		SpawnedMap spawnedMap;
+
+		//map of creatures in the spawn
+		std::map<uint32_t, spawnBlock_t> spawnMap;
+
 		Position centerPos;
 		int32_t radius;
 
-		//map of creatures in the spawn
-		typedef std::map<uint32_t, spawnBlock_t> SpawnMap;
-		SpawnMap spawnMap;
+		uint32_t interval = 60000;
+		uint32_t checkSpawnEvent = 0;
 
-		//map of the spawned creatures
-		typedef std::multimap<uint32_t, Monster*, std::less<uint32_t> > SpawnedMap;
-		typedef SpawnedMap::value_type spawned_pair;
-		SpawnedMap spawnedMap;
-
-		uint32_t interval;
-		uint32_t checkSpawnEvent;
-
-		bool findPlayer(const Position& pos);
+		static bool findPlayer(const Position& pos);
 		bool spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& pos, Direction dir, bool startup = false);
 		void checkSpawn();
+};
+
+class Spawns
+{
+	public:
+		static bool isInZone(const Position& centerPos, int32_t radius, const Position& pos);
+
+		bool loadFromXml(const std::string& filename);
+		void startup();
+		void clear();
+
+		bool isStarted() const {
+			return started;
+		}
+
+	private:
+		std::forward_list<Npc*> npcList;
+		std::forward_list<Spawn> spawnList;
+		std::string filename;
+		bool loaded = false;
+		bool started = false;
 };
 
 #endif

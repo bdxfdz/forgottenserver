@@ -1,12 +1,11 @@
 local keywordHandler = KeywordHandler:new()
 local npcHandler = NpcHandler:new(keywordHandler)
 NpcSystem.parseParameters(npcHandler)
-local talkState = {}
 
-function onCreatureAppear(cid)				npcHandler:onCreatureAppear(cid)			end
-function onCreatureDisappear(cid) 			npcHandler:onCreatureDisappear(cid)			end
-function onCreatureSay(cid, type, msg)			npcHandler:onCreatureSay(cid, type, msg)		end
-function onThink()					npcHandler:onThink()					end
+function onCreatureAppear(cid)              npcHandler:onCreatureAppear(cid)            end
+function onCreatureDisappear(cid)           npcHandler:onCreatureDisappear(cid)         end
+function onCreatureSay(cid, type, msg)      npcHandler:onCreatureSay(cid, type, msg)    end
+function onThink()                          npcHandler:onThink()                        end
 
 local shopModule = ShopModule:new()
 npcHandler:addModule(shopModule)
@@ -29,7 +28,7 @@ shopModule:addSellableItem({'normal potion flask', 'normal flask'}, 7636, 5, 'em
 shopModule:addSellableItem({'strong potion flask', 'strong flask'}, 7634, 10, 'empty strong potion flask')
 shopModule:addSellableItem({'great potion flask', 'great flask'}, 7635, 15, 'empty great potion flask')
 
-shopModule:addBuyableItem({'instense healing'}, 2265, 95, 1, 'intense healing rune')
+shopModule:addBuyableItem({'intense healing'}, 2265, 95, 1, 'intense healing rune')
 shopModule:addBuyableItem({'ultimate healing'}, 2273, 175, 1, 'ultimate healing rune')
 shopModule:addBuyableItem({'magic wall'}, 2293, 350, 3, 'magic wall rune')
 shopModule:addBuyableItem({'destroy field'}, 2261, 45, 3, 'destroy field rune')
@@ -38,12 +37,11 @@ shopModule:addBuyableItem({'heavy magic missile'}, 2311, 120, 10, 'heavy magic m
 shopModule:addBuyableItem({'great fireball'}, 2304, 180, 4, 'great fireball rune')
 shopModule:addBuyableItem({'explosion'}, 2313, 250, 6, 'explosion rune')
 shopModule:addBuyableItem({'sudden death'}, 2268, 350, 3, 'sudden death rune')
-shopModule:addBuyableItem({'death arrow'}, 2263, 300, 3, 'death arrow rune')
 shopModule:addBuyableItem({'paralyze'}, 2278, 700, 1, 'paralyze rune')
 shopModule:addBuyableItem({'animate dead'}, 2316, 375, 1, 'animate dead rune')
 shopModule:addBuyableItem({'convince creature'}, 2290, 80, 1, 'convince creature rune')
 shopModule:addBuyableItem({'chameleon'}, 2291, 210, 1, 'chameleon rune')
-shopModule:addBuyableItem({'desintegrate'}, 2310, 80,  3, 'desintegreate rune')
+shopModule:addBuyableItem({'disintegrate'}, 2310, 80, 3, 'disintegrate rune')
 
 shopModule:addBuyableItemContainer({'bp ap'}, 2002, 8378, 2000, 1, 'backpack of antidote potions')
 shopModule:addBuyableItemContainer({'bp slhp'}, 2000, 8610, 400, 1, 'backpack of small health potions')
@@ -72,7 +70,7 @@ shopModule:addBuyableItem({'northwind rod', 'northwind'}, 8911, 7500, 'northwind
 shopModule:addBuyableItem({'terra rod', 'terra'}, 2181, 10000, 'terra rod')
 shopModule:addBuyableItem({'hailstorm rod', 'hailstorm'}, 2183, 15000, 'hailstorm rod')
 shopModule:addBuyableItem({'springsprout rod', 'springsprout'}, 8912, 18000, 'springsprout rod')
-shopModule:addBuyableItem({'underworld rod', 'underworld'}, 8910, 22000,  'underworld rod')
+shopModule:addBuyableItem({'underworld rod', 'underworld'}, 8910, 22000, 'underworld rod')
 
 shopModule:addSellableItem({'wand of vortex', 'vortex'}, 2190, 250, 'wand of vortex')
 shopModule:addSellableItem({'wand of dragonbreath', 'dragonbreath'}, 2191, 500, 'wand of dragonbreath')
@@ -84,7 +82,7 @@ shopModule:addSellableItem({'wand of starstorm', 'starstorm'}, 8920, 9000, 'wand
 shopModule:addSellableItem({'wand of voodoo', 'voodoo'}, 8922, 11000, 'wand of voodoo')
 
 shopModule:addSellableItem({'snakebite rod', 'snakebite'}, 2182, 250,'snakebite rod')
-shopModule:addSellableItem({'moonlight rod', 'moonlight'}, 2186, 500,   'moonlight rod')
+shopModule:addSellableItem({'moonlight rod', 'moonlight'}, 2186, 500, 'moonlight rod')
 shopModule:addSellableItem({'necrotic rod', 'necrotic'}, 2185, 2500, 'necrotic rod')
 shopModule:addSellableItem({'northwind rod', 'northwind'}, 8911, 3750, 'northwind rod')
 shopModule:addSellableItem({'terra rod', 'terra'}, 2181, 5000, 'terra rod')
@@ -94,34 +92,40 @@ shopModule:addSellableItem({'underworld rod', 'underworld'}, 8910, 11000, 'under
 
 
 function creatureSayCallback(cid, type, msg)
-	if(not npcHandler:isFocused(cid)) then
+	if not npcHandler:isFocused(cid) then
 		return false
 	end
 
-	local talkUser = NPCHANDLER_CONVBEHAVIOR == CONVERSATION_DEFAULT and 0 or cid
+	local player = Player(cid)
+	local vocationId = player:getVocation():getId()
+	local items = {
+		[1] = 2190,
+		[2] = 2182,
+		[5] = 2190,
+		[6] = 2182
+	}
 
-	local items = {[1] = 2190, [2] = 2182, [5] = 2190, [6] = 2182}
-	if(msgcontains(msg, 'first rod') or msgcontains(msg, 'first wand')) then
-		if(isSorcerer(cid) or isDruid(cid)) then
-			if(getPlayerStorageValue(cid, 30002) == -1) then
-				selfSay('So you ask me for a {' .. getItemNameById(items[getPlayerVocation(cid)]) .. '} to begin your advanture?', cid)
-				talkState[talkUser] = 1
+	if msgcontains(msg, 'first rod') or msgcontains(msg, 'first wand') then
+		if table.contains({1, 2, 5, 6}, vocationId) then
+			if player:getStorageValue(PlayerStorageKeys.firstRod) == -1 then
+				selfSay('So you ask me for a {' .. ItemType(items[vocationId]):getName() .. '} to begin your adventure?', cid)
+				npcHandler.topic[cid] = 1
 			else
-				selfSay('What? I have already gave you one {' .. getItemNameById(items[getPlayerVocation(cid)]) .. '}!', cid)
+				selfSay('What? I have already gave you one {' .. ItemType(items[vocationId]):getName() .. '}!', cid)
 			end
 		else
 			selfSay('Sorry, you aren\'t a druid either a sorcerer.', cid)
 		end
-	elseif(msgcontains(msg, 'yes')) then
-		if(talkState[talkUser] == 1) then
-			doPlayerAddItem(cid, items[getPlayerVocation(cid)], 1)
+	elseif msgcontains(msg, 'yes') then
+		if npcHandler.topic[cid] == 1 then
+			player:addItem(items[vocationId], 1)
 			selfSay('Here you are young adept, take care yourself.', cid)
-			setPlayerStorageValue(cid, 30002, 1)
+			player:setStorageValue(PlayerStorageKeys.firstRod, 1)
 		end
-		talkState[talkUser] = 0
-	elseif(msgcontains(msg, 'no') and isInArray({1}, talkState[talkUser]) == TRUE) then
+		npcHandler.topic[cid] = 0
+	elseif msgcontains(msg, 'no') and npcHandler.topic[cid] == 1 then
 		selfSay('Ok then.', cid)
-		talkState[talkUser] = 0
+		npcHandler.topic[cid] = 0
 	end
 
 	return true

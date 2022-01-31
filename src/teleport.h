@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,54 +17,53 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_TELEPORT_H__
-#define __OTSERV_TELEPORT_H__
+#ifndef FS_TELEPORT_H_873B7F7F1DB24101A7ACFB54B25E0ABC
+#define FS_TELEPORT_H_873B7F7F1DB24101A7ACFB54B25E0ABC
 
 #include "tile.h"
 
-class Teleport : public Item, public Cylinder
+class Teleport final : public Item, public Cylinder
 {
 	public:
-		Teleport(uint16_t _type);
-		~Teleport();
+		explicit Teleport(uint16_t type) : Item(type) {};
 
-		virtual Teleport* getTeleport() {
+		Teleport* getTeleport() override {
 			return this;
 		}
-		virtual const Teleport* getTeleport() const {
+		const Teleport* getTeleport() const override {
 			return this;
 		}
 
 		//serialization
-		virtual Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream);
-		virtual bool serializeAttr(PropWriteStream& propWriteStream) const;
+		Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
+		void serializeAttr(PropWriteStream& propWriteStream) const override;
 
-		void setDestPos(const Position& pos) {
-			destPos = pos;
-		}
 		const Position& getDestPos() const {
 			return destPos;
 		}
+		void setDestPos(Position pos) {
+			destPos = std::move(pos);
+		}
 
 		//cylinder implementations
-		virtual ReturnValue __queryAdd(int32_t index, const Thing* thing, uint32_t count,
-		                               uint32_t flags, Creature* actor = NULL) const;
-		virtual ReturnValue __queryMaxCount(int32_t index, const Thing* thing, uint32_t count,
-		                                    uint32_t& maxQueryCount, uint32_t flags) const;
-		virtual ReturnValue __queryRemove(const Thing* thing, uint32_t count, uint32_t flags) const;
-		virtual Cylinder* __queryDestination(int32_t& index, const Thing* thing, Item** destItem,
-		                                     uint32_t& flags);
+		ReturnValue queryAdd(int32_t index, const Thing& thing, uint32_t count,
+				uint32_t flags, Creature* actor = nullptr) const override;
+		ReturnValue queryMaxCount(int32_t index, const Thing& thing, uint32_t count,
+				uint32_t& maxQueryCount, uint32_t flags) const override;
+		ReturnValue queryRemove(const Thing& thing, uint32_t count, uint32_t flags) const override;
+		Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem,
+				uint32_t& flags) override;
 
-		virtual void __addThing(Thing* thing);
-		virtual void __addThing(int32_t index, Thing* thing);
+		void addThing(Thing* thing) override;
+		void addThing(int32_t index, Thing* thing) override;
 
-		virtual void __updateThing(Thing* thing, uint16_t itemId, uint32_t count);
-		virtual void __replaceThing(uint32_t index, Thing* thing);
+		void updateThing(Thing* thing, uint16_t itemId, uint32_t count) override;
+		void replaceThing(uint32_t index, Thing* thing) override;
 
-		virtual void __removeThing(Thing* thing, uint32_t count);
+		void removeThing(Thing* thing, uint32_t count) override;
 
-		virtual void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link = LINK_OWNER);
-		virtual void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link = LINK_OWNER);
+		void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link = LINK_OWNER) override;
+		void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t link = LINK_OWNER) override;
 
 	private:
 		Position destPos;

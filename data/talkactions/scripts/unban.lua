@@ -1,6 +1,6 @@
-function onSay(cid, words, param)
-	if getPlayerAccess(cid) <= 0 then
-		return false
+function onSay(player, words, param)
+	if not player:getGroup():getAccess() then
+		return true
 	end
 
 	local resultId = db.storeQuery("SELECT `account_id`, `lastip` FROM `players` WHERE `name` = " .. db.escapeString(param))
@@ -8,8 +8,9 @@ function onSay(cid, words, param)
 		return false
 	end
 
-	db:query("DELETE FROM `account_bans` WHERE `account_id` = " .. result.getDataInt(resultId, "account_id"))
-	db:query("DELETE FROM `ip_bans` WHERE `ip` = " .. result.getDataInt(resultId, "lastip"))
+	db.asyncQuery("DELETE FROM `account_bans` WHERE `account_id` = " .. result.getNumber(resultId, "account_id"))
+	db.asyncQuery("DELETE FROM `ip_bans` WHERE `ip` = " .. result.getNumber(resultId, "lastip"))
 	result.free(resultId)
-	doPlayerSendTextMessage(cid, MESSAGE_EVENT_ADVANCE, param .. " has been unbanned.")
+	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, param .. " has been unbanned.")
+	return false
 end

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,42 +23,36 @@
 
 #include "wildcardtree.h"
 
-WildcardTreeNode::WildcardTreeNode(bool breakpoint)
+WildcardTreeNode* WildcardTreeNode::getChild(char ch)
 {
-	this->breakpoint = breakpoint;
-}
-
-WildcardTreeNode::~WildcardTreeNode()
-{
-	for (std::map<char, WildcardTreeNode*>::const_iterator it = children.begin(), end = children.end(); it != end; ++it) {
-		delete it->second;
-	}
-}
-
-WildcardTreeNode* WildcardTreeNode::getChild(char ch) const
-{
-	std::map<char, WildcardTreeNode*>::const_iterator it = children.find(ch);
-
+	auto it = children.find(ch);
 	if (it == children.end()) {
-		return NULL;
+		return nullptr;
 	}
+	return &it->second;
+}
 
-	return it->second;
+const WildcardTreeNode* WildcardTreeNode::getChild(char ch) const
+{
+	auto it = children.find(ch);
+	if (it == children.end()) {
+		return nullptr;
+	}
+	return &it->second;
 }
 
 WildcardTreeNode* WildcardTreeNode::addChild(char ch, bool breakpoint)
 {
 	WildcardTreeNode* child = getChild(ch);
-
 	if (child) {
 		if (breakpoint && !child->breakpoint) {
 			child->breakpoint = true;
 		}
 	} else {
-		child = new WildcardTreeNode(breakpoint);
-		children[ch] = child;
+		auto pair = children.emplace(std::piecewise_construct,
+				std::forward_as_tuple(ch), std::forward_as_tuple(breakpoint));
+		child = &pair.first->second;
 	}
-
 	return child;
 }
 
@@ -67,7 +61,6 @@ void WildcardTreeNode::insert(const std::string& str)
 	WildcardTreeNode* cur = this;
 
 	size_t length = str.length() - 1;
-
 	for (size_t pos = 0; pos < length; ++pos) {
 		cur = cur->addChild(str[pos], false);
 	}
@@ -82,9 +75,11 @@ void WildcardTreeNode::remove(const std::string& str)
 	std::stack<WildcardTreeNode*> path;
 	path.push(cur);
 	size_t len = str.length();
-
 	for (size_t pos = 0; pos < len; ++pos) {
 		cur = cur->getChild(str[pos]);
+		if (!cur) {
+			return;
+		}
 		path.push(cur);
 	}
 
@@ -100,10 +95,8 @@ void WildcardTreeNode::remove(const std::string& str)
 
 		cur = path.top();
 
-		std::map<char, WildcardTreeNode*>::iterator it = cur->children.find(str[--len]);
-
+		auto it = cur->children.find(str[--len]);
 		if (it != cur->children.end()) {
-			delete it->second;
 			cur->children.erase(it);
 		}
 	} while (true);
@@ -112,12 +105,10 @@ void WildcardTreeNode::remove(const std::string& str)
 ReturnValue WildcardTreeNode::findOne(const std::string& query, std::string& result) const
 {
 	const WildcardTreeNode* cur = this;
-
-	for (size_t pos = 0; pos < query.length(); ++pos) {
-		cur = cur->getChild(query[pos]);
-
+	for (char pos : query) {
+		cur = cur->getChild(pos);
 		if (!cur) {
-			return RET_PLAYERWITHTHISNAMEISNOTONLINE;
+			return RETURNVALUE_PLAYERWITHTHISNAMEISNOTONLINE;
 		}
 	}
 
@@ -125,15 +116,14 @@ ReturnValue WildcardTreeNode::findOne(const std::string& query, std::string& res
 
 	do {
 		size_t size = cur->children.size();
-
 		if (size == 0) {
-			return RET_NOERROR;
+			return RETURNVALUE_NOERROR;
 		} else if (size > 1 || cur->breakpoint) {
-			return RET_NAMEISTOOAMBIGIOUS;
+			return RETURNVALUE_NAMEISTOOAMBIGUOUS;
 		}
 
-		std::map<char, WildcardTreeNode*>::const_iterator it = cur->children.begin();
+		auto it = cur->children.begin();
 		result += it->first;
-		cur = it->second;
+		cur = &it->second;
 	} while (true);
 }

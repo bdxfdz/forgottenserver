@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,59 +20,43 @@
 #include "otpch.h"
 
 #include "depotlocker.h"
-#include "tools.h"
 
-DepotLocker::DepotLocker(uint16_t _type) :
-	Container(_type)
-{
-	depotId = 0;
-	maxSize = 3;
-}
-
-DepotLocker::~DepotLocker()
-{
-	//
-}
+DepotLocker::DepotLocker(uint16_t type) :
+	Container(type, 3), depotId(0) {}
 
 Attr_ReadValue DepotLocker::readAttr(AttrTypes_t attr, PropStream& propStream)
 {
 	if (attr == ATTR_DEPOT_ID) {
-		uint16_t _depotId;
-
-		if (!propStream.GET_USHORT(_depotId)) {
+		if (!propStream.read<uint16_t>(depotId)) {
 			return ATTR_READ_ERROR;
 		}
-
-		setDepotId(_depotId);
 		return ATTR_READ_CONTINUE;
-	} else {
-		return Item::readAttr(attr, propStream);
+	}
+	return Item::readAttr(attr, propStream);
+}
+
+ReturnValue DepotLocker::queryAdd(int32_t, const Thing&, uint32_t, uint32_t, Creature*) const
+{
+	return RETURNVALUE_NOTENOUGHROOM;
+}
+
+void DepotLocker::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)
+{
+	if (parent != nullptr) {
+		parent->postAddNotification(thing, oldParent, index, LINK_PARENT);
 	}
 }
 
-ReturnValue DepotLocker::__queryAdd(int32_t index, const Thing* thing, uint32_t count,
-                                    uint32_t flags, Creature* actor/* = NULL*/) const
+void DepotLocker::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t)
 {
-	return Container::__queryAdd(index, thing, count, flags, actor);
-}
-
-void DepotLocker::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link /*= LINK_OWNER*/)
-{
-	if (getParent() != NULL) {
-		getParent()->postAddNotification(thing, oldParent, index, LINK_PARENT);
-	}
-}
-
-void DepotLocker::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link /*= LINK_OWNER*/)
-{
-	if (getParent() != NULL) {
-		getParent()->postRemoveNotification(thing, newParent, index, isCompleteRemoval, LINK_PARENT);
+	if (parent != nullptr) {
+		parent->postRemoveNotification(thing, newParent, index, LINK_PARENT);
 	}
 }
 
 void DepotLocker::removeInbox(Inbox* inbox)
 {
-	ItemDeque::iterator cit = std::find(itemlist.begin(), itemlist.end(), inbox);
+	auto cit = std::find(itemlist.begin(), itemlist.end(), inbox);
 	if (cit == itemlist.end()) {
 		return;
 	}

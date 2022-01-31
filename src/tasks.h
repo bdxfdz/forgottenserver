@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,90 +17,72 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_TASKS_H__
-#define __OTSERV_TASKS_H__
+#ifndef FS_TASKS_H_A66AC384766041E59DCA059DAB6E1976
+#define FS_TASKS_H_A66AC384766041E59DCA059DAB6E1976
 
-#include <boost/function.hpp>
-#include <boost/thread.hpp>
+#include <condition_variable>
+#include "thread_holder_base.h"
+#include "enums.h"
 
 const int DISPATCHER_TASK_EXPIRATION = 2000;
+const auto SYSTEM_TIME_ZERO = std::chrono::system_clock::time_point(std::chrono::milliseconds(0));
 
 class Task
 {
 	public:
 		// DO NOT allocate this class on the stack
-		Task(uint32_t ms, const boost::function<void (void)>& f) : m_f(f) {
-			m_expiration = boost::get_system_time() + boost::posix_time::milliseconds(ms);
-		}
-		Task(const boost::function<void (void)>& f)
-			: m_expiration(boost::date_time::not_a_date_time), m_f(f) {}
+		explicit Task(std::function<void (void)>&& f) : func(std::move(f)) {}
+		Task(uint32_t ms, std::function<void (void)>&& f) :
+			expiration(std::chrono::system_clock::now() + std::chrono::milliseconds(ms)), func(std::move(f)) {}
 
-		~Task() {}
-
+		virtual ~Task() = default;
 		void operator()() {
-			m_f();
+			func();
 		}
 
 		void setDontExpire() {
-			m_expiration = boost::date_time::not_a_date_time;
+			expiration = SYSTEM_TIME_ZERO;
 		}
 
 		bool hasExpired() const {
-			if (m_expiration == boost::date_time::not_a_date_time) {
+			if (expiration == SYSTEM_TIME_ZERO) {
 				return false;
 			}
-
-			return m_expiration < boost::get_system_time();
+			return expiration < std::chrono::system_clock::now();
 		}
 
 	protected:
+		std::chrono::system_clock::time_point expiration = SYSTEM_TIME_ZERO;
+
+	private:
 		// Expiration has another meaning for scheduler tasks,
 		// then it is the time the task should be added to the
 		// dispatcher
-		boost::system_time m_expiration;
-		boost::function<void (void)> m_f;
+		std::function<void (void)> func;
 };
 
-inline Task* createTask(boost::function<void (void)> f)
-{
-	return new Task(f);
-}
+Task* createTask(std::function<void (void)> f);
+Task* createTask(uint32_t expiration, std::function<void (void)> f);
 
-inline Task* createTask(uint32_t expiration, boost::function<void (void)> f)
-{
-	return new Task(expiration, f);
-}
-
-enum DispatcherState {
-	STATE_RUNNING,
-	STATE_CLOSING,
-	STATE_TERMINATED
-};
-
-class Dispatcher
-{
+class Dispatcher : public ThreadHolder<Dispatcher> {
 	public:
-		Dispatcher();
-		~Dispatcher() {}
-
 		void addTask(Task* task, bool push_front = false);
 
-		void start();
-		void stop();
 		void shutdown();
-		void join();
 
-	protected:
-		void dispatcherThread();
+		uint64_t getDispatcherCycle() const {
+			return dispatcherCycle;
+		}
 
-		void flush();
+		void threadMain();
 
-		boost::thread m_thread;
-		boost::mutex m_taskLock;
-		boost::condition_variable m_taskSignal;
+	private:
+		std::thread thread;
+		std::mutex taskLock;
+		std::condition_variable taskSignal;
 
-		std::list<Task*> m_taskList;
-		DispatcherState m_threadState;
+		std::list<Task*> taskList;
+		uint64_t dispatcherCycle = 0;
 };
 
 extern Dispatcher g_dispatcher;

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,14 +17,13 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_IOMAP_H__
-#define __OTSERV_IOMAP_H__
+#ifndef FS_IOMAP_H_8085D4B1037A44288494A52FDBB775E4
+#define FS_IOMAP_H_8085D4B1037A44288494A52FDBB775E4
 
 #include "item.h"
 #include "map.h"
 #include "house.h"
 #include "spawn.h"
-#include "status.h"
 #include "configmanager.h"
 
 extern ConfigManager g_config;
@@ -51,7 +50,7 @@ enum OTBM_AttrTypes_t {
 	OTBM_ATTR_WRITTENBY = 19,
 	OTBM_ATTR_SLEEPERGUID = 20,
 	OTBM_ATTR_SLEEPSTART = 21,
-	OTBM_ATTR_CHARGES = 22
+	OTBM_ATTR_CHARGES = 22,
 };
 
 enum OTBM_NodeTypes_t {
@@ -70,7 +69,14 @@ enum OTBM_NodeTypes_t {
 	OTBM_TOWN = 13,
 	OTBM_HOUSETILE = 14,
 	OTBM_WAYPOINTS = 15,
-	OTBM_WAYPOINT = 16
+	OTBM_WAYPOINT = 16,
+};
+
+enum OTBM_TileFlag_t : uint32_t {
+	OTBM_TILEFLAG_PROTECTIONZONE = 1 << 0,
+	OTBM_TILEFLAG_NOPVPZONE = 1 << 2,
+	OTBM_TILEFLAG_NOLOGOUT = 1 << 3,
+	OTBM_TILEFLAG_PVPZONE = 1 << 4
 };
 
 #pragma pack(1)
@@ -84,38 +90,30 @@ struct OTBM_root_header {
 };
 
 struct OTBM_Destination_coords {
-	uint16_t _x;
-	uint16_t _y;
-	uint8_t _z;
+	uint16_t x;
+	uint16_t y;
+	uint8_t z;
 };
 
 struct OTBM_Tile_coords {
-	uint8_t _x;
-	uint8_t _y;
-};
-
-struct OTBM_HouseTile_coords {
-	uint8_t _x;
-	uint8_t _y;
-	uint32_t _houseid;
+	uint8_t x;
+	uint8_t y;
 };
 
 #pragma pack()
 
 class IOMap
 {
-		static Tile* createTile(Item*& ground, Item* item, int px, int py, int pz);
-	public:
-		IOMap() {}
-		~IOMap() {}
+	static Tile* createTile(Item*& ground, Item* item, uint16_t x, uint16_t y, uint8_t z);
 
-		bool loadMap(Map* map, const std::string& identifier);
+	public:
+		bool loadMap(Map* map, const std::string& fileName);
 
 		/* Load the spawns
 		 * \param map pointer to the Map class
 		 * \returns Returns true if the spawns were loaded successfully
 		 */
-		bool loadSpawns(Map* map) {
+		static bool loadSpawns(Map* map) {
 			if (map->spawnfile.empty()) {
 				//OTBM file doesn't tell us about the spawnfile,
 				//lets guess it is mapname-spawn.xml.
@@ -123,14 +121,14 @@ class IOMap
 				map->spawnfile += "-spawn.xml";
 			}
 
-			return Spawns::getInstance()->loadFromXml(map->spawnfile);
+			return map->spawns.loadFromXml(map->spawnfile);
 		}
 
 		/* Load the houses (not house tile-data)
 		 * \param map pointer to the Map class
 		 * \returns Returns true if the houses were loaded successfully
 		 */
-		bool loadHouses(Map* map) {
+		static bool loadHouses(Map* map) {
 			if (map->housefile.empty()) {
 				//OTBM file doesn't tell us about the housefile,
 				//lets guess it is mapname-house.xml.
@@ -138,18 +136,22 @@ class IOMap
 				map->housefile += "-house.xml";
 			}
 
-			return Houses::getInstance().loadHousesXML(map->housefile);
+			return map->houses.loadHousesXML(map->housefile);
 		}
 
 		const std::string& getLastErrorString() const {
 			return errorString;
 		}
 
-		void setLastErrorString(const std::string& _errorString) {
-			errorString = _errorString;
+		void setLastErrorString(std::string error) {
+			errorString = error;
 		}
 
-	protected:
+	private:
+		bool parseMapDataAttributes(OTB::Loader& loader, const OTB::Node& mapNode, Map& map, const std::string& fileName);
+		bool parseWaypoints(OTB::Loader& loader, const OTB::Node& waypointsNode, Map& map);
+		bool parseTowns(OTB::Loader& loader, const OTB::Node& townsNode, Map& map);
+		bool parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Map& map);
 		std::string errorString;
 };
 

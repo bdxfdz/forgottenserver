@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,121 +24,99 @@
 
 extern Game g_game;
 
-Teleport::Teleport(uint16_t _type) : Item(_type)
-{
-	destPos.x = 0;
-	destPos.y = 0;
-	destPos.z = 0;
-}
-
-Teleport::~Teleport()
-{
-	//
-}
-
 Attr_ReadValue Teleport::readAttr(AttrTypes_t attr, PropStream& propStream)
 {
-	if (ATTR_TELE_DEST == attr) {
-		TeleportDest* tele_dest;
-
-		if (!propStream.GET_STRUCT(tele_dest)) {
+	if (attr == ATTR_TELE_DEST) {
+		if (!propStream.read<uint16_t>(destPos.x) || !propStream.read<uint16_t>(destPos.y) || !propStream.read<uint8_t>(destPos.z)) {
 			return ATTR_READ_ERROR;
 		}
-
-		setDestPos(Position(tele_dest->_x, tele_dest->_y, tele_dest->_z));
 		return ATTR_READ_CONTINUE;
-	} else {
-		return Item::readAttr(attr, propStream);
 	}
+	return Item::readAttr(attr, propStream);
 }
 
-bool Teleport::serializeAttr(PropWriteStream& propWriteStream) const
+void Teleport::serializeAttr(PropWriteStream& propWriteStream) const
 {
-	bool ret = Item::serializeAttr(propWriteStream);
+	Item::serializeAttr(propWriteStream);
 
-	propWriteStream.ADD_UCHAR(ATTR_TELE_DEST);
-
-	TeleportDest tele_dest;
-
-	tele_dest._x = destPos.x;
-	tele_dest._y = destPos.y;
-	tele_dest._z = (uint8_t)destPos.z;
-
-	propWriteStream.ADD_VALUE(tele_dest);
-
-	return ret;
+	propWriteStream.write<uint8_t>(ATTR_TELE_DEST);
+	propWriteStream.write<uint16_t>(destPos.x);
+	propWriteStream.write<uint16_t>(destPos.y);
+	propWriteStream.write<uint8_t>(destPos.z);
 }
 
-ReturnValue Teleport::__queryAdd(int32_t index, const Thing* thing, uint32_t count,
-                                 uint32_t flags, Creature* actor/* = NULL*/) const
+ReturnValue Teleport::queryAdd(int32_t, const Thing&, uint32_t, uint32_t, Creature*) const
 {
-	return RET_NOTPOSSIBLE;
+	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-ReturnValue Teleport::__queryMaxCount(int32_t index, const Thing* thing, uint32_t count,
-                                      uint32_t& maxQueryCount, uint32_t flags) const
+ReturnValue Teleport::queryMaxCount(int32_t, const Thing&, uint32_t, uint32_t&, uint32_t) const
 {
-	return RET_NOTPOSSIBLE;
+	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-ReturnValue Teleport::__queryRemove(const Thing* thing, uint32_t count, uint32_t flags) const
+ReturnValue Teleport::queryRemove(const Thing&, uint32_t, uint32_t) const
 {
-	return RET_NOERROR;
+	return RETURNVALUE_NOERROR;
 }
 
-Cylinder* Teleport::__queryDestination(int32_t& index, const Thing* thing, Item** destItem,
-                                       uint32_t& flags)
+Cylinder* Teleport::queryDestination(int32_t&, const Thing&, Item**, uint32_t&)
 {
 	return this;
 }
 
-void Teleport::__addThing(Thing* thing)
+void Teleport::addThing(Thing* thing)
 {
-	return __addThing(0, thing);
+	return addThing(0, thing);
 }
 
-void Teleport::__addThing(int32_t index, Thing* thing)
+void Teleport::addThing(int32_t, Thing* thing)
 {
-	Tile* destTile = g_game.getTile(destPos.x, destPos.y, destPos.z);
-
+	Tile* destTile = g_game.map.getTile(destPos);
 	if (!destTile) {
 		return;
 	}
 
+	const MagicEffectClasses effect = Item::items[id].magicEffect;
+
 	if (Creature* creature = thing->getCreature()) {
 		Position origPos = creature->getPosition();
-		g_game.internalCreatureTurn(creature, origPos.x > destPos.x ? WEST : EAST);
-		getTile()->moveCreature(creature, destTile);
-		g_game.addMagicEffect(origPos, NM_ME_TELEPORT);
-		g_game.addMagicEffect(destTile->getPosition(), NM_ME_TELEPORT);
+		g_game.internalCreatureTurn(creature, origPos.x > destPos.x ? DIRECTION_WEST : DIRECTION_EAST);
+		g_game.map.moveCreature(*creature, *destTile);
+		if (effect != CONST_ME_NONE) {
+			g_game.addMagicEffect(origPos, effect);
+			g_game.addMagicEffect(destTile->getPosition(), effect);
+		}
 	} else if (Item* item = thing->getItem()) {
-		g_game.addMagicEffect(item->getPosition(), NM_ME_TELEPORT);
-		g_game.internalMoveItem(getTile(), destTile, INDEX_WHEREEVER, item, item->getItemCount(), NULL);
-		g_game.addMagicEffect(destTile->getPosition(), NM_ME_TELEPORT);
+		if (effect != CONST_ME_NONE) {
+			g_game.addMagicEffect(destTile->getPosition(), effect);
+			g_game.addMagicEffect(item->getPosition(), effect);
+		}
+		g_game.internalMoveItem(getTile(), destTile, INDEX_WHEREEVER, item, item->getItemCount(), nullptr, FLAG_NOLIMIT);
 	}
 }
 
-void Teleport::__updateThing(Thing* thing, uint16_t itemId, uint32_t count)
+void Teleport::updateThing(Thing*, uint16_t, uint32_t)
 {
 	//
 }
 
-void Teleport::__replaceThing(uint32_t index, Thing* thing)
+void Teleport::replaceThing(uint32_t, Thing*)
 {
 	//
 }
 
-void Teleport::__removeThing(Thing* thing, uint32_t count)
+void Teleport::removeThing(Thing*, uint32_t)
 {
 	//
 }
 
-void Teleport::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link /*= LINK_OWNER*/)
+void Teleport::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)
 {
 	getParent()->postAddNotification(thing, oldParent, index, LINK_PARENT);
 }
 
-void Teleport::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link /*= LINK_OWNER*/)
+void Teleport::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t)
 {
-	getParent()->postRemoveNotification(thing, newParent, index, isCompleteRemoval, LINK_PARENT);
+	getParent()->postRemoveNotification(thing, newParent, index, LINK_PARENT);
 }

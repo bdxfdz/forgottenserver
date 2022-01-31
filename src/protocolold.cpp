@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,67 +21,57 @@
 
 #include "protocolold.h"
 #include "outputmessage.h"
-#include "connection.h"
 
-#include "rsa.h"
 #include "game.h"
 
 extern Game g_game;
 
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-uint32_t ProtocolOld::protocolOldCount = 0;
-#endif
-
-void ProtocolOld::disconnectClient(uint8_t error, const char* message)
+void ProtocolOld::disconnectClient(const std::string& message)
 {
-	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
+	auto output = OutputMessagePool::getOutputMessage();
+	output->addByte(0x0A);
+	output->addString(message);
+	send(output);
 
-	if (output) {
-		output->AddByte(error);
-		output->AddString(message);
-		OutputMessagePool::getInstance()->send(output);
-	}
-
-	getConnection()->closeConnection();
+	disconnect();
 }
 
-bool ProtocolOld::parseFirstPacket(NetworkMessage& msg)
+void ProtocolOld::onRecvFirstMessage(NetworkMessage& msg)
 {
 	if (g_game.getGameState() == GAME_STATE_SHUTDOWN) {
-		getConnection()->closeConnection();
-		return false;
+		disconnect();
+		return;
 	}
 
-	/*uint16_t clientOS =*/ msg.GetU16();
-	uint16_t version = msg.GetU16();
-	msg.SkipBytes(12);
+	/*uint16_t clientOS =*/ msg.get<uint16_t>();
+	uint16_t version = msg.get<uint16_t>();
+	msg.skipBytes(12);
 
 	if (version <= 760) {
-		disconnectClient(0x0A, "Only clients with protocol " CLIENT_VERSION_STR " allowed!");
+		std::ostringstream ss;
+		ss << "Only clients with protocol " << CLIENT_VERSION_STR << " allowed!";
+		disconnectClient(ss.str());
+		return;
 	}
 
-	if (!RSA_decrypt(msg)) {
-		getConnection()->closeConnection();
-		return false;
+	if (!Protocol::RSA_decrypt(msg)) {
+		disconnect();
+		return;
 	}
 
-	uint32_t key[4];
-	key[0] = msg.GetU32();
-	key[1] = msg.GetU32();
-	key[2] = msg.GetU32();
-	key[3] = msg.GetU32();
+	xtea::key key;
+	key[0] = msg.get<uint32_t>();
+	key[1] = msg.get<uint32_t>();
+	key[2] = msg.get<uint32_t>();
+	key[3] = msg.get<uint32_t>();
 	enableXTEAEncryption();
-	setXTEAKey(key);
+	setXTEAKey(std::move(key));
 
 	if (version <= 822) {
 		disableChecksum();
 	}
 
-	disconnectClient(0x0A, "Only clients with protocol " CLIENT_VERSION_STR " allowed!");
-	return false;
-}
-
-void ProtocolOld::onRecvFirstMessage(NetworkMessage& msg)
-{
-	parseFirstPacket(msg);
+	std::ostringstream ss;
+	ss << "Only clients with protocol " << CLIENT_VERSION_STR << " allowed!";
+	disconnectClient(ss.str());
 }

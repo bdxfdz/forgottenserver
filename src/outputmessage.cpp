@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,193 +21,57 @@
 
 #include "outputmessage.h"
 #include "protocol.h"
+#include "lockfree.h"
 #include "scheduler.h"
 
-extern Dispatcher g_dispatcher;
+extern Scheduler g_scheduler;
 
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-uint32_t OutputMessagePool::OutputMessagePoolCount = OUTPUT_POOL_SIZE;
-#endif
+const uint16_t OUTPUTMESSAGE_FREE_LIST_CAPACITY = 2048;
+const std::chrono::milliseconds OUTPUTMESSAGE_AUTOSEND_DELAY {10};
 
-OutputMessage::OutputMessage()
+void OutputMessagePool::scheduleSendAll()
 {
-	freeMessage();
-}
-
-//*********** OutputMessagePool ****************//
-
-OutputMessagePool::OutputMessagePool()
-{
-	for (uint32_t i = 0; i < OUTPUT_POOL_SIZE; ++i) {
-		OutputMessage* msg = new OutputMessage();
-		m_outputMessages.push_back(msg);
-	}
-
-	m_frameTime = OTSYS_TIME();
-}
-
-void OutputMessagePool::startExecutionFrame()
-{
-	//boost::recursive_mutex::scoped_lock lockClass(m_outputPoolLock);
-	m_frameTime = OTSYS_TIME();
-	m_isOpen = true;
-}
-
-OutputMessagePool::~OutputMessagePool()
-{
-	InternalOutputMessageList::iterator it;
-
-	for (it = m_outputMessages.begin(); it != m_outputMessages.end(); ++it) {
-		delete *it;
-	}
-
-	m_outputMessages.clear();
-}
-
-void OutputMessagePool::send(OutputMessage_ptr msg)
-{
-	m_outputPoolLock.lock();
-	OutputMessage::OutputMessageState state = msg->getState();
-	m_outputPoolLock.unlock();
-
-	if (state == OutputMessage::STATE_ALLOCATED_NO_AUTOSEND) {
-		Connection_ptr connection = msg->getConnection();
-		if (connection && !connection->send(msg)) {
-			// Send only fails when connection is closing (or in error state)
-			// This call will free the message
-			msg->getProtocol()->onSendMessage(msg);
-		}
-	}
+	auto functor = std::bind(&OutputMessagePool::sendAll, this);
+	g_scheduler.addEvent(createSchedulerTask(OUTPUTMESSAGE_AUTOSEND_DELAY.count(), functor));
 }
 
 void OutputMessagePool::sendAll()
 {
-	boost::recursive_mutex::scoped_lock lockClass(m_outputPoolLock);
-
-	const int64_t dropTime = m_frameTime - 10000;
-	const int64_t frameTime = m_frameTime - 10;
-
-	for (OutputMessageMessageList::const_iterator it = m_toAddQueue.begin(), end = m_toAddQueue.end(); it != end; ++it) {
-		OutputMessage_ptr omsg = *it;
-		const int64_t msgFrame = omsg->getFrame();
-
-		if (msgFrame >= dropTime) {
-			omsg->setState(OutputMessage::STATE_ALLOCATED);
-
-			if (frameTime > msgFrame) {
-				m_autoSendOutputMessages.push_front(omsg);
-			} else {
-				m_autoSendOutputMessages.push_back(omsg);
-			}
-		} else {
-			//drop messages that are older than 10 seconds
-			omsg->getProtocol()->onSendMessage(omsg);
+	//dispatcher thread
+	for (auto& protocol : bufferedProtocols) {
+		auto& msg = protocol->getCurrentBuffer();
+		if (msg) {
+			protocol->send(std::move(msg));
 		}
 	}
 
-	m_toAddQueue.clear();
-
-	for (OutputMessageMessageList::iterator it = m_autoSendOutputMessages.begin(), end = m_autoSendOutputMessages.end(); it != end; it = m_autoSendOutputMessages.erase(it)) {
-		OutputMessage_ptr omsg = *it;
-
-		if (frameTime <= omsg->getFrame()) {
-			break;
-		}
-
-		Connection_ptr connection = omsg->getConnection();
-
-		if (connection && !connection->send(omsg)) {
-			// Send only fails when connection is closing (or in error state)
-			// This call will free the message
-			omsg->getProtocol()->onSendMessage(omsg);
-		}
+	if (!bufferedProtocols.empty()) {
+		scheduleSendAll();
 	}
 }
 
-void OutputMessagePool::releaseMessage(OutputMessage* msg)
+void OutputMessagePool::addProtocolToAutosend(Protocol_ptr protocol)
 {
-	g_dispatcher.addTask(
-	    createTask(boost::bind(&OutputMessagePool::internalReleaseMessage, this, msg)));
+	//dispatcher thread
+	if (bufferedProtocols.empty()) {
+		scheduleSendAll();
+	}
+	bufferedProtocols.emplace_back(protocol);
 }
 
-void OutputMessagePool::internalReleaseMessage(OutputMessage* msg)
+void OutputMessagePool::removeProtocolFromAutosend(const Protocol_ptr& protocol)
 {
-	if (msg->getProtocol()) {
-		msg->getProtocol()->unRef();
-	} else {
-		std::cout << "No protocol found." << std::endl;
+	//dispatcher thread
+	auto it = std::find(bufferedProtocols.begin(), bufferedProtocols.end(), protocol);
+	if (it != bufferedProtocols.end()) {
+		std::swap(*it, bufferedProtocols.back());
+		bufferedProtocols.pop_back();
 	}
-
-	if (msg->getConnection()) {
-		msg->getConnection()->unRef();
-	} else {
-		std::cout << "No connection found." << std::endl;
-	}
-
-	msg->freeMessage();
-
-	m_outputPoolLock.lock();
-	m_outputMessages.push_back(msg);
-	m_outputPoolLock.unlock();
 }
 
-OutputMessage_ptr OutputMessagePool::getOutputMessage(Protocol* protocol, bool autosend /*= true*/)
+OutputMessage_ptr OutputMessagePool::getOutputMessage()
 {
-	if (!m_isOpen) {
-		return OutputMessage_ptr();
-	}
-
-	boost::recursive_mutex::scoped_lock lockClass(m_outputPoolLock);
-
-	if (!protocol->getConnection()) {
-		return OutputMessage_ptr();
-	}
-
-	if (m_outputMessages.empty()) {
-		OutputMessage* msg = new OutputMessage();
-		m_outputMessages.push_back(msg);
-
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-		OutputMessagePoolCount++;
-#endif
-	}
-
-	OutputMessage_ptr outputmessage;
-	outputmessage.reset(m_outputMessages.back(),
-	                    boost::bind(&OutputMessagePool::releaseMessage, this, _1));
-
-	m_outputMessages.pop_back();
-
-	configureOutputMessage(outputmessage, protocol, autosend);
-	return outputmessage;
-}
-
-void OutputMessagePool::configureOutputMessage(OutputMessage_ptr msg, Protocol* protocol, bool autosend)
-{
-	msg->Reset();
-
-	if (autosend) {
-		msg->setState(OutputMessage::STATE_ALLOCATED);
-		m_autoSendOutputMessages.push_back(msg);
-	} else {
-		msg->setState(OutputMessage::STATE_ALLOCATED_NO_AUTOSEND);
-	}
-
-	Connection_ptr connection = protocol->getConnection();
-	assert(connection);
-
-	msg->setProtocol(protocol);
-	protocol->addRef();
-
-	msg->setConnection(connection);
-	connection->addRef();
-
-	msg->setFrame(m_frameTime);
-}
-
-void OutputMessagePool::addToAutoSend(OutputMessage_ptr msg)
-{
-	m_outputPoolLock.lock();
-	m_toAddQueue.push_back(msg);
-	m_outputPoolLock.unlock();
+	// LockfreePoolingAllocator<void,...> will leave (void* allocate) ill-formed because
+	// of sizeof(T), so this guaranatees that only one list will be initialized
+	return std::allocate_shared<OutputMessage>(LockfreePoolingAllocator<void, OUTPUTMESSAGE_FREE_LIST_CAPACITY>());
 }

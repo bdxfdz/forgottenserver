@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,24 +17,21 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __ACCOUNT__
-#define __ACCOUNT__
+#ifndef FS_ACCOUNT_H_34817537BA2B4CB7B71AA562AFBB118F
+#define FS_ACCOUNT_H_34817537BA2B4CB7B71AA562AFBB118F
 
-#include <list>
-#include <string>
-#include "definitions.h"
 #include "enums.h"
 
 struct Account {
-	uint32_t id, lastDay, premiumDays;
-	AccountType_t accountType;
+	std::vector<std::string> characters;
 	std::string name;
-	std::list<std::string> charList;
+	std::string key;
+	time_t lastDay = 0;
+	uint32_t id = 0;
+	uint16_t premiumDays = 0;
+	AccountType_t accountType = ACCOUNT_TYPE_NORMAL;
 
-	Account() {
-		id = 0;
-		accountType = ACCOUNT_TYPE_NORMAL;
-	}
+	Account() = default;
 };
 
 #endif

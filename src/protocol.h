@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,108 +17,89 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_PROTOCOL_H__
-#define __OTSERV_PROTOCOL_H__
+#ifndef FS_PROTOCOL_H_D71405071ACF4137A4B1203899DE80E1
+#define FS_PROTOCOL_H_D71405071ACF4137A4B1203899DE80E1
 
-#include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
+#include "connection.h"
+#include "xtea.h"
 
-class NetworkMessage;
-class OutputMessage;
-class Connection;
-typedef boost::shared_ptr<OutputMessage> OutputMessage_ptr;
-typedef boost::shared_ptr<Connection> Connection_ptr;
-class RSA;
-
-class Protocol : boost::noncopyable
+class Protocol : public std::enable_shared_from_this<Protocol>
 {
 	public:
-		Protocol(Connection_ptr connection) {
-			m_connection = connection;
-			m_encryptionEnabled = false;
-			m_checksumEnabled = true;
-			m_rawMessages = false;
-			m_key[0] = 0;
-			m_key[1] = 0;
-			m_key[2] = 0;
-			m_key[3] = 0;
-			m_refCount = 0;
-		}
+		explicit Protocol(Connection_ptr connection) : connection(connection) {}
+		virtual ~Protocol() = default;
 
-		virtual ~Protocol() {}
+		// non-copyable
+		Protocol(const Protocol&) = delete;
+		Protocol& operator=(const Protocol&) = delete;
 
-		virtual int32_t getProtocolId() {
-			return 0x00;
-		}
+		virtual void parsePacket(NetworkMessage&) {}
 
-		virtual void parsePacket(NetworkMessage& msg) {}
-
-		virtual void onSendMessage(OutputMessage_ptr msg);
+		virtual void onSendMessage(const OutputMessage_ptr& msg) const;
 		void onRecvMessage(NetworkMessage& msg);
 		virtual void onRecvFirstMessage(NetworkMessage& msg) = 0;
 		virtual void onConnect() {}
 
-		Connection_ptr getConnection() {
-			return m_connection;
+		bool isConnectionExpired() const {
+			return connection.expired();
 		}
-		const Connection_ptr getConnection() const {
-			return m_connection;
-		}
-		void setConnection(Connection_ptr connection) {
-			m_connection = connection;
+
+		Connection_ptr getConnection() const {
+			return connection.lock();
 		}
 
 		uint32_t getIP() const;
 
-		int32_t addRef() {
-			return ++m_refCount;
-		}
-		int32_t unRef() {
-			return --m_refCount;
-		}
-
 		//Use this function for autosend messages only
 		OutputMessage_ptr getOutputBuffer(int32_t size);
 
+		OutputMessage_ptr& getCurrentBuffer() {
+			return outputBuffer;
+		}
+
+		void send(OutputMessage_ptr msg) const {
+			if (auto connection = getConnection()) {
+				connection->send(msg);
+			}
+		}
+
 	protected:
+		void disconnect() const {
+			if (auto connection = getConnection()) {
+				connection->close();
+			}
+		}
 		void enableXTEAEncryption() {
-			m_encryptionEnabled = true;
+			encryptionEnabled = true;
 		}
-		void disableXTEAEncryption() {
-			m_encryptionEnabled = false;
-		}
-		void setXTEAKey(const uint32_t* key) {
-			memcpy(m_key, key, sizeof(uint32_t) * 4);
-		}
-		void enableChecksum() {
-			m_checksumEnabled = true;
+		void setXTEAKey(xtea::key key) {
+			this->key = std::move(key);
 		}
 		void disableChecksum() {
-			m_checksumEnabled = false;
+			checksumEnabled = false;
 		}
 
-		void XTEA_encrypt(OutputMessage& msg);
-		bool XTEA_decrypt(NetworkMessage& msg);
-		bool RSA_decrypt(NetworkMessage& msg);
-		bool RSA_decrypt(RSA* rsa, NetworkMessage& msg);
+		static bool RSA_decrypt(NetworkMessage& msg);
 
 		void setRawMessages(bool value) {
-			m_rawMessages = value;
+			rawMessages = value;
 		}
 
-		virtual void releaseProtocol();
-		virtual void deleteProtocolTask();
-		friend class Connection;
-
-		OutputMessage_ptr m_outputBuffer;
+		virtual void release() {}
 
 	private:
-		Connection_ptr m_connection;
-		bool m_encryptionEnabled;
-		bool m_checksumEnabled;
-		bool m_rawMessages;
-		uint32_t m_key[4];
-		uint32_t m_refCount;
+		void XTEA_encrypt(OutputMessage& msg) const;
+		bool XTEA_decrypt(NetworkMessage& msg) const;
+
+		friend class Connection;
+
+		OutputMessage_ptr outputBuffer;
+
+		const ConnectionWeak_ptr connection;
+		xtea::key key;
+		bool encryptionEnabled = false;
+		bool checksumEnabled = true;
+		bool rawMessages = false;
 };
 
 #endif

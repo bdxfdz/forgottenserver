@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,31 +17,27 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_RSA_H__
-#define __OTSERV_RSA_H__
+#ifndef FS_RSA_H_C4E277DA8E884B578DDBF0566F504E91
+#define FS_RSA_H_C4E277DA8E884B578DDBF0566F504E91
 
-#include <boost/thread/recursive_mutex.hpp>
+#include <cryptopp/rsa.h>
 
-#include "gmp.h"
+#include <string>
 
 class RSA
 {
 	public:
-		RSA();
-		~RSA();
-		void setKey(const char* p, const char* q, const char* d);
-		bool setKey(const std::string& file);
-		void decrypt(char* msg, int32_t size);
+		RSA() = default;
 
-		void getPublicKey(char* buffer);
+		// non-copyable
+		RSA(const RSA&) = delete;
+		RSA& operator=(const RSA&) = delete;
 
-	protected:
-		bool m_keySet;
+		void loadPEM(const std::string& filename);
+		void decrypt(char* msg) const;
 
-		boost::recursive_mutex rsaLock;
-
-		//use only GMP
-		mpz_t m_p, m_q, m_u, m_d, m_dp, m_dq, m_mod;
+	private:
+		CryptoPP::RSA::PrivateKey pk;
 };
 
 #endif

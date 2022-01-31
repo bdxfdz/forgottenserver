@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,151 +19,151 @@
 
 #include "otpch.h"
 
-#include "creature.h"
 #include "player.h"
-#include "tools.h"
-
-#include <libxml/xmlmemory.h>
-#include <libxml/parser.h>
-
 #include "talkaction.h"
-
-extern Game g_game;
+#include "pugicast.h"
 
 TalkActions::TalkActions()
-	: m_scriptInterface("TalkAction Interface")
+	: scriptInterface("TalkAction Interface")
 {
-	m_scriptInterface.initState();
+	scriptInterface.initState();
 }
 
 TalkActions::~TalkActions()
 {
-	clear();
+	clear(false);
 }
 
-void TalkActions::clear()
+void TalkActions::clear(bool fromLua)
 {
-	TalkActionList::iterator it = wordsMap.begin();
-
-	while (it != wordsMap.end()) {
-		delete it->second;
-		wordsMap.erase(it);
-		it = wordsMap.begin();
+	for (auto it = talkActions.begin(); it != talkActions.end(); ) {
+		if (fromLua == it->second.fromLua) {
+			it = talkActions.erase(it);
+		} else {
+			++it;
+		}
 	}
 
-	m_scriptInterface.reInitState();
+	reInitState(fromLua);
 }
 
 LuaScriptInterface& TalkActions::getScriptInterface()
 {
-	return m_scriptInterface;
+	return scriptInterface;
 }
 
-std::string TalkActions::getScriptBaseName()
+std::string TalkActions::getScriptBaseName() const
 {
 	return "talkactions";
 }
 
-Event* TalkActions::getEvent(const std::string& nodeName)
+Event_ptr TalkActions::getEvent(const std::string& nodeName)
 {
-	if (asLowerCaseString(nodeName) == "talkaction") {
-		return new TalkAction(&m_scriptInterface);
+	if (strcasecmp(nodeName.c_str(), "talkaction") != 0) {
+		return nullptr;
 	}
-
-	return NULL;
+	return Event_ptr(new TalkAction(&scriptInterface));
 }
 
-bool TalkActions::registerEvent(Event* event, xmlNodePtr p)
+bool TalkActions::registerEvent(Event_ptr event, const pugi::xml_node&)
 {
-	TalkAction* talkAction = dynamic_cast<TalkAction*>(event);
-
-	if (!talkAction) {
-		return false;
-	}
-
-	wordsMap.push_back(std::make_pair(talkAction->getWords(), talkAction));
+	TalkAction_ptr talkAction{static_cast<TalkAction*>(event.release())}; // event is guaranteed to be a TalkAction
+	talkActions.emplace(talkAction->getWords(), std::move(*talkAction));
 	return true;
 }
 
-TalkActionResult_t TalkActions::playerSaySpell(Player* player, SpeakClasses type, const std::string& words)
+bool TalkActions::registerLuaEvent(TalkAction* event)
 {
-	if (type != SPEAK_SAY) {
-		return TALKACTION_CONTINUE;
-	}
+	TalkAction_ptr talkAction{ event };
+	talkActions.emplace(talkAction->getWords(), std::move(*talkAction));
+	return true;
+}
 
-	std::string str_words;
-	std::string str_param;
-	size_t loc = words.find('"', 0);
+TalkActionResult_t TalkActions::playerSaySpell(Player* player, SpeakClasses type, const std::string& words) const
+{
+	size_t wordsLength = words.length();
+	for (auto it = talkActions.begin(); it != talkActions.end(); ) {
+		const std::string& talkactionWords = it->first;
+		size_t talkactionLength = talkactionWords.length();
+		if (wordsLength < talkactionLength || strncasecmp(words.c_str(), talkactionWords.c_str(), talkactionLength) != 0) {
+			++it;
+			continue;
+		}
 
-	if (loc != std::string::npos) {
-		str_words = std::string(words, 0, loc);
-		str_param = std::string(words, (loc + 1), words.size() - loc - 1);
-	} else {
-		str_words = words;
-	}
-
-	trim_left(str_words, " ");
-	trim_right(str_words, " ");
-
-	for (const auto& it : wordsMap) {
-		if (it.first == str_words) {
-			if (it.second->executeSay(player, str_words, str_param)) {
-				return TALKACTION_CONTINUE;
-			} else {
-				return TALKACTION_BREAK;
+		std::string param;
+		if (wordsLength != talkactionLength) {
+			param = words.substr(talkactionLength);
+			if (param.front() != ' ') {
+				++it;
+				continue;
 			}
+			trim_left(param, ' ');
+
+			std::string separator = it->second.getSeparator();
+			if (separator != " ") {
+				if (!param.empty()) {
+					if (param != separator) {
+						++it;
+						continue;
+					} else {
+						param.erase(param.begin());
+					}
+				}
+			}
+		}
+
+		if (it->second.executeSay(player, param, type)) {
+			return TALKACTION_CONTINUE;
+		} else {
+			return TALKACTION_BREAK;
 		}
 	}
 	return TALKACTION_CONTINUE;
 }
 
-TalkAction::TalkAction(LuaScriptInterface* _interface) :
-	Event(_interface)
+bool TalkAction::configureEvent(const pugi::xml_node& node)
 {
-	//
-}
-
-TalkAction::~TalkAction()
-{
-	//
-}
-
-bool TalkAction::configureEvent(xmlNodePtr p)
-{
-	std::string strValue;
-
-	if (readXMLString(p, "words", strValue)) {
-		m_words = strValue;
-	} else {
-		std::cout << "Error: [TalkAction::configureEvent] No words for TalkAction or Spell." << std::endl;
+	pugi::xml_attribute wordsAttribute = node.attribute("words");
+	if (!wordsAttribute) {
+		std::cout << "[Error - TalkAction::configureEvent] Missing words for talk action or spell" << std::endl;
 		return false;
 	}
 
+	pugi::xml_attribute separatorAttribute = node.attribute("separator");
+	if (separatorAttribute) {
+		separator = pugi::cast<char>(separatorAttribute.value());
+	}
+
+	words = wordsAttribute.as_string();
 	return true;
 }
 
-std::string TalkAction::getScriptEventName()
+std::string TalkAction::getScriptEventName() const
 {
 	return "onSay";
 }
 
-bool TalkAction::executeSay(Creature* creature, const std::string& words, const std::string& param)
+bool TalkAction::executeSay(Player* player, const std::string& param, SpeakClasses type) const
 {
-	//onSay(cid, words, param)
-	if (!m_scriptInterface->reserveScriptEnv()) {
+	//onSay(player, words, param, type)
+	if (!scriptInterface->reserveScriptEnv()) {
 		std::cout << "[Error - TalkAction::executeSay] Call stack overflow" << std::endl;
 		return false;
 	}
 
-	ScriptEnvironment* env = m_scriptInterface->getScriptEnv();
-	env->setScriptId(m_scriptId, m_scriptInterface);
+	ScriptEnvironment* env = scriptInterface->getScriptEnv();
+	env->setScriptId(scriptId, scriptInterface);
 
-	lua_State* L = m_scriptInterface->getLuaState();
+	lua_State* L = scriptInterface->getLuaState();
 
-	m_scriptInterface->pushFunction(m_scriptId);
-	lua_pushnumber(L, creature->getID());
+	scriptInterface->pushFunction(scriptId);
+
+	LuaScriptInterface::pushUserdata<Player>(L, player);
+	LuaScriptInterface::setMetatable(L, -1, "Player");
+
 	LuaScriptInterface::pushString(L, words);
 	LuaScriptInterface::pushString(L, param);
+	lua_pushnumber(L, type);
 
-	return m_scriptInterface->callFunction(3);
+	return scriptInterface->callFunction(4);
 }

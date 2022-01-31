@@ -6,17 +6,18 @@ local statues = {
 	[18492] = SKILL_MAGLEVEL
 }
 
-function onUse(cid, item, fromPosition, itemEx, toPosition)
-	if not isPremium(cid) then
-		doPlayerSendDefaultCancel(cid, RETURNVALUE_YOUNEEDPREMIUMACCOUNT)
+function onUse(player, item, fromPosition, target, toPosition, isHotkey)
+	local skill = statues[item:getId()]
+	if not player:isPremium() then
+		player:sendCancelMessage(RETURNVALUE_YOUNEEDPREMIUMACCOUNT)
 		return true
 	end
 
-	if isPlayerPzLocked(cid) then
+	if player:isPzLocked() then
 		return false
 	end
 
-	doPlayerSetOfflineTrainingSkill(cid, statues[item.itemid])
-	doRemoveCreature(cid)
+	player:setOfflineTrainingSkill(skill)
+	player:remove()
 	return true
 end

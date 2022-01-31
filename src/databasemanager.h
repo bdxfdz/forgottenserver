@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,37 +17,22 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __DATABASE_MANAGER__
-#define __DATABASE_MANAGER__
+#ifndef FS_DATABASEMANAGER_H_2B75821C555E4D1D83E32B20D683217C
+#define FS_DATABASEMANAGER_H_2B75821C555E4D1D83E32B20D683217C
 #include "database.h"
 
 class DatabaseManager
 {
 	public:
-		DatabaseManager() {}
-		virtual ~DatabaseManager() {}
+		static bool tableExists(const std::string& tableName);
 
-		static DatabaseManager* getInstance() {
-			static DatabaseManager instance;
-			return &instance;
-		}
+		static int32_t getDatabaseVersion();
+		static bool isDatabaseSetup();
 
-		bool tableExists(const std::string& table);
-		bool triggerExists(const std::string& trigger);
+		static bool optimizeTables();
+		static void updateDatabase();
 
-		int32_t getDatabaseVersion();
-		bool isDatabaseSetup();
-
-		bool optimizeTables();
-		void updateDatabase();
-
-		bool getDatabaseConfig(const std::string& config, int32_t& value);
-		void registerDatabaseConfig(const std::string& config, int32_t value);
-
-		bool getDatabaseConfig(const std::string& config, std::string& value);
-		void registerDatabaseConfig(const std::string& config, const std::string& value);
-
-		void checkEncryption();
-		void checkTriggers();
+		static bool getDatabaseConfig(const std::string& config, int32_t& value);
+		static void registerDatabaseConfig(const std::string& config, int32_t value);
 };
 #endif

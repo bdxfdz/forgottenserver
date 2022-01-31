@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,64 +17,77 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __TALKACTION_H__
-#define __TALKACTION_H__
+#ifndef FS_TALKACTION_H_E6AABAC0F89843469526ADF310F3131C
+#define FS_TALKACTION_H_E6AABAC0F89843469526ADF310F3131C
 
-#include <list>
-#include <string>
 #include "luascript.h"
 #include "baseevents.h"
 #include "const.h"
 
+class TalkAction;
+using TalkAction_ptr = std::unique_ptr<TalkAction>;
+
 enum TalkActionResult_t {
 	TALKACTION_CONTINUE,
 	TALKACTION_BREAK,
-	TALKACTION_FAILED
-};
-
-class TalkAction;
-
-class TalkActions : public BaseEvents
-{
-	public:
-		TalkActions();
-		virtual ~TalkActions();
-
-		TalkActionResult_t playerSaySpell(Player* player, SpeakClasses type, const std::string& words);
-
-	protected:
-		virtual LuaScriptInterface& getScriptInterface();
-		virtual std::string getScriptBaseName();
-		virtual Event* getEvent(const std::string& nodeName);
-		virtual bool registerEvent(Event* event, xmlNodePtr p);
-		virtual void clear();
-
-		typedef std::list< std::pair<std::string, TalkAction* > > TalkActionList;
-		TalkActionList wordsMap;
-
-		LuaScriptInterface m_scriptInterface;
+	TALKACTION_FAILED,
 };
 
 class TalkAction : public Event
 {
 	public:
-		TalkAction(LuaScriptInterface* _interface);
-		virtual ~TalkAction();
+		explicit TalkAction(LuaScriptInterface* interface) : Event(interface) {}
 
-		virtual bool configureEvent(xmlNodePtr p);
+		bool configureEvent(const pugi::xml_node& node) override;
 
-		std::string getWords() const {
-			return m_words;
+		const std::string& getWords() const {
+			return words;
+		}
+		void setWords(std::string word) {
+			words = word;
+		}
+		std::string getSeparator() const {
+			return separator;
+		}
+		void setSeparator(std::string sep) {
+			separator = sep;
 		}
 
 		//scripting
-		bool executeSay(Creature* creature, const std::string& words, const std::string& param);
+		bool executeSay(Player* player, const std::string& param, SpeakClasses type) const;
 		//
 
-	protected:
-		virtual std::string getScriptEventName();
+	private:
+		std::string getScriptEventName() const override;
 
-		std::string m_words;
+		std::string words;
+		std::string separator = "\"";
+};
+
+class TalkActions final : public BaseEvents
+{
+	public:
+		TalkActions();
+		~TalkActions();
+
+		// non-copyable
+		TalkActions(const TalkActions&) = delete;
+		TalkActions& operator=(const TalkActions&) = delete;
+
+		TalkActionResult_t playerSaySpell(Player* player, SpeakClasses type, const std::string& words) const;
+
+		bool registerLuaEvent(TalkAction* event);
+		void clear(bool fromLua) override final;
+
+	private:
+		LuaScriptInterface& getScriptInterface() override;
+		std::string getScriptBaseName() const override;
+		Event_ptr getEvent(const std::string& nodeName) override;
+		bool registerEvent(Event_ptr event, const pugi::xml_node& node) override;
+
+		std::map<std::string, TalkAction> talkActions;
+
+		LuaScriptInterface scriptInterface;
 };
 
 #endif

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,45 +20,59 @@
 #include "otpch.h"
 
 #include "scriptmanager.h"
-#include "luascript.h"
-
-#include <libxml/xmlmemory.h>
-#include <libxml/parser.h>
 
 #include "actions.h"
+#include "chat.h"
 #include "talkaction.h"
 #include "spells.h"
 #include "movement.h"
 #include "weapons.h"
-#include "creatureevent.h"
 #include "globalevent.h"
+#include "events.h"
+#include "script.h"
 
-Actions* g_actions = NULL;
-CreatureEvents* g_creatureEvents = NULL;
-GlobalEvents* g_globalEvents = NULL;
-Spells* g_spells = NULL;
-TalkActions* g_talkActions = NULL;
-MoveEvents* g_moveEvents = NULL;
-Weapons* g_weapons = NULL;
+Actions* g_actions = nullptr;
+CreatureEvents* g_creatureEvents = nullptr;
+Chat* g_chat = nullptr;
+Events* g_events = nullptr;
+GlobalEvents* g_globalEvents = nullptr;
+Spells* g_spells = nullptr;
+TalkActions* g_talkActions = nullptr;
+MoveEvents* g_moveEvents = nullptr;
+Weapons* g_weapons = nullptr;
+Scripts* g_scripts = nullptr;
 
-ScriptingManager::ScriptingManager()
-{
-	//
-}
+extern LuaEnvironment g_luaEnvironment;
 
 ScriptingManager::~ScriptingManager()
 {
+	delete g_events;
 	delete g_weapons;
 	delete g_spells;
 	delete g_actions;
 	delete g_talkActions;
 	delete g_moveEvents;
+	delete g_chat;
 	delete g_creatureEvents;
 	delete g_globalEvents;
+	delete g_scripts;
 }
 
 bool ScriptingManager::loadScriptSystems()
 {
+	if (g_luaEnvironment.loadFile("data/global.lua") == -1) {
+		std::cout << "[Warning - ScriptingManager::loadScriptSystems] Can not load data/global.lua" << std::endl;
+	}
+
+	g_scripts = new Scripts();
+	std::cout << ">> Loading lua libs" << std::endl;
+	if (!g_scripts->loadScripts("scripts/lib", true, false)) {
+		std::cout << "> ERROR: Unable to load lua libs!" << std::endl;
+		return false;
+	}
+
+	g_chat = new Chat();
+
 	g_weapons = new Weapons();
 	if (!g_weapons->loadFromXml()) {
 		std::cout << "> ERROR: Unable to load weapons!" << std::endl;
@@ -100,6 +114,12 @@ bool ScriptingManager::loadScriptSystems()
 	g_globalEvents = new GlobalEvents();
 	if (!g_globalEvents->loadFromXml()) {
 		std::cout << "> ERROR: Unable to load global events!" << std::endl;
+		return false;
+	}
+
+	g_events = new Events();
+	if (!g_events->load()) {
+		std::cout << "> ERROR: Unable to load events!" << std::endl;
 		return false;
 	}
 

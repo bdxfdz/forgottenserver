@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,23 +22,15 @@
 #include "depotchest.h"
 #include "tools.h"
 
-DepotChest::DepotChest(uint16_t _type) :
-	Container(_type)
-{
-	maxDepotItems = 1500;
-}
+DepotChest::DepotChest(uint16_t type) :
+	Container(type), maxDepotItems(1500) {}
 
-DepotChest::~DepotChest()
+ReturnValue DepotChest::queryAdd(int32_t index, const Thing& thing, uint32_t count,
+		uint32_t flags, Creature* actor/* = nullptr*/) const
 {
-	//
-}
-
-ReturnValue DepotChest::__queryAdd(int32_t index, const Thing* thing, uint32_t count,
-                                   uint32_t flags, Creature* actor/* = NULL*/) const
-{
-	const Item* item = thing->getItem();
-	if (item == NULL) {
-		return RET_NOTPOSSIBLE;
+	const Item* item = thing.getItem();
+	if (item == nullptr) {
+		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
 	bool skipLimit = hasBitSet(FLAG_NOLIMIT, flags);
@@ -58,23 +50,33 @@ ReturnValue DepotChest::__queryAdd(int32_t index, const Thing* thing, uint32_t c
 		}
 
 		if (getItemHoldingCount() + addCount > maxDepotItems) {
-			return RET_DEPOTISFULL;
+			return RETURNVALUE_DEPOTISFULL;
 		}
 	}
 
-	return Container::__queryAdd(index, thing, count, flags, actor);
+	return Container::queryAdd(index, thing, count, flags, actor);
 }
 
-void DepotChest::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link /*= LINK_OWNER*/)
+void DepotChest::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)
 {
-	if (getParent() != NULL) {
-		getParent()->postAddNotification(thing, oldParent, index, LINK_PARENT);
+	Cylinder* parent = getParent();
+	if (parent != nullptr) {
+		parent->postAddNotification(thing, oldParent, index, LINK_PARENT);
 	}
 }
 
-void DepotChest::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, bool isCompleteRemoval, cylinderlink_t link /*= LINK_OWNER*/)
+void DepotChest::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t)
 {
-	if (getParent() != NULL) {
-		getParent()->postRemoveNotification(thing, newParent, index, isCompleteRemoval, LINK_PARENT);
+	Cylinder* parent = getParent();
+	if (parent != nullptr) {
+		parent->postRemoveNotification(thing, newParent, index, LINK_PARENT);
 	}
+}
+
+Cylinder* DepotChest::getParent() const
+{
+	if (parent) {
+		return parent->getParent();
+	}
+	return nullptr;
 }

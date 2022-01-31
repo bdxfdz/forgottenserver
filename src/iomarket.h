@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,41 +17,36 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_IOMARKET_H__
-#define __OTSERV_IOMARKET_H__
+#ifndef FS_IOMARKET_H_B981E52C218C42D3B9EF726EBF0E92C9
+#define FS_IOMARKET_H_B981E52C218C42D3B9EF726EBF0E92C9
 
-#include <string>
-#include "account.h"
-#include "player.h"
+#include "enums.h"
 #include "database.h"
 
 class IOMarket
 {
 	public:
-		IOMarket() {}
-		~IOMarket() {}
-
-		static IOMarket* getInstance() {
+		static IOMarket& getInstance() {
 			static IOMarket instance;
-			return &instance;
+			return instance;
 		}
 
-		MarketOfferList getActiveOffers(MarketAction_t action, uint16_t itemId);
-		MarketOfferList getOwnOffers(MarketAction_t action, uint32_t playerId);
-		HistoryMarketOfferList getOwnHistory(MarketAction_t action, uint32_t playerId);
+		static MarketOfferList getActiveOffers(MarketAction_t action, uint16_t itemId);
+		static MarketOfferList getOwnOffers(MarketAction_t action, uint32_t playerId);
+		static HistoryMarketOfferList getOwnHistory(MarketAction_t action, uint32_t playerId);
 
-		ExpiredMarketOfferList getExpiredOffers(MarketAction_t action);
+		static void processExpiredOffers(DBResult_ptr result, bool);
+		static void checkExpiredOffers();
 
-		int32_t getPlayerOfferCount(uint32_t playerId);
-		uint32_t getOfferIdByCounter(uint32_t timestamp, uint16_t counter);
-		MarketOfferEx getOfferById(uint32_t id);
+		static uint32_t getPlayerOfferCount(uint32_t playerId);
+		static MarketOfferEx getOfferByCounter(uint32_t timestamp, uint16_t counter);
 
-		void createOffer(uint32_t playerId, MarketAction_t action, uint32_t itemId, uint16_t amount, uint32_t price, bool anonymous);
-		void acceptOffer(uint32_t offerId, uint16_t amount);
-		void deleteOffer(uint32_t offerId);
+		static void createOffer(uint32_t playerId, MarketAction_t action, uint32_t itemId, uint16_t amount, uint32_t price, bool anonymous);
+		static void acceptOffer(uint32_t offerId, uint16_t amount);
+		static void deleteOffer(uint32_t offerId);
 
-		void appendHistory(uint32_t playerId, MarketAction_t type, uint16_t itemId, uint16_t amount, uint32_t price, time_t timestamp, MarketOfferState_t state);
-		void moveOfferToHistory(uint32_t offerId, MarketOfferState_t state);
+		static void appendHistory(uint32_t playerId, MarketAction_t type, uint16_t itemId, uint16_t amount, uint32_t price, time_t timestamp, MarketOfferState_t state);
+		static bool moveOfferToHistory(uint32_t offerId, MarketOfferState_t state);
 
 		void updateStatistics();
 
@@ -59,6 +54,8 @@ class IOMarket
 		MarketStatistics* getSaleStatistics(uint16_t itemId);
 
 	private:
+		IOMarket() = default;
+
 		std::map<uint16_t, MarketStatistics> purchaseStatistics;
 		std::map<uint16_t, MarketStatistics> saleStatistics;
 };

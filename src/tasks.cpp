@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,60 +20,48 @@
 #include "otpch.h"
 
 #include "tasks.h"
-#include "outputmessage.h"
 #include "game.h"
 
 extern Game g_game;
 
-Dispatcher::Dispatcher()
+Task* createTask(std::function<void (void)> f)
 {
-	m_taskList.clear();
-	m_threadState = STATE_TERMINATED;
+	return new Task(std::move(f));
 }
 
-void Dispatcher::start()
+Task* createTask(uint32_t expiration, std::function<void (void)> f)
 {
-	m_threadState = STATE_RUNNING;
-	m_thread = boost::thread(boost::bind(&Dispatcher::dispatcherThread, this));
+	return new Task(expiration, std::move(f));
 }
 
-void Dispatcher::dispatcherThread()
+void Dispatcher::threadMain()
 {
-	OutputMessagePool* outputPool = OutputMessagePool::getInstance();
-
 	// NOTE: second argument defer_lock is to prevent from immediate locking
-	boost::unique_lock<boost::mutex> taskLockUnique(m_taskLock, boost::defer_lock);
+	std::unique_lock<std::mutex> taskLockUnique(taskLock, std::defer_lock);
 
-	while (m_threadState != STATE_TERMINATED) {
-		Task* task = NULL;
-
+	while (getState() != THREAD_STATE_TERMINATED) {
 		// check if there are tasks waiting
 		taskLockUnique.lock();
 
-		if (m_taskList.empty()) {
+		if (taskList.empty()) {
 			//if the list is empty wait for signal
-			m_taskSignal.wait(taskLockUnique);
+			taskSignal.wait(taskLockUnique);
 		}
 
-		if (!m_taskList.empty() && (m_threadState != STATE_TERMINATED)) {
+		if (!taskList.empty()) {
 			// take the first task
-			task = m_taskList.front();
-			m_taskList.pop_front();
-		}
+			Task* task = taskList.front();
+			taskList.pop_front();
+			taskLockUnique.unlock();
 
-		taskLockUnique.unlock();
-
-		// finally execute the task...
-		if (task) {
 			if (!task->hasExpired()) {
-				outputPool->startExecutionFrame();
+				++dispatcherCycle;
+				// execute it
 				(*task)();
-				outputPool->sendAll();
-
-				g_game.clearSpectatorCache();
 			}
-
 			delete task;
+		} else {
+			taskLockUnique.unlock();
 		}
 	}
 }
@@ -82,64 +70,37 @@ void Dispatcher::addTask(Task* task, bool push_front /*= false*/)
 {
 	bool do_signal = false;
 
-	m_taskLock.lock();
+	taskLock.lock();
 
-	if (m_threadState == STATE_RUNNING) {
-		do_signal = m_taskList.empty();
+	if (getState() == THREAD_STATE_RUNNING) {
+		do_signal = taskList.empty();
 
 		if (push_front) {
-			m_taskList.push_front(task);
+			taskList.push_front(task);
 		} else {
-			m_taskList.push_back(task);
+			taskList.push_back(task);
 		}
 	} else {
 		delete task;
-		task = NULL;
 	}
 
-	m_taskLock.unlock();
+	taskLock.unlock();
 
 	// send a signal if the list was empty
 	if (do_signal) {
-		m_taskSignal.notify_one();
+		taskSignal.notify_one();
 	}
-}
-
-void Dispatcher::flush()
-{
-	Task* task = NULL;
-
-	while (!m_taskList.empty()) {
-		task = m_taskList.front();
-		m_taskList.pop_front();
-		(*task)();
-		delete task;
-
-		OutputMessagePool* outputPool = OutputMessagePool::getInstance();
-		if (outputPool) {
-			outputPool->sendAll();
-		}
-
-		g_game.clearSpectatorCache();
-	}
-}
-
-void Dispatcher::stop()
-{
-	m_taskLock.lock();
-	m_threadState = STATE_CLOSING;
-	m_taskLock.unlock();
 }
 
 void Dispatcher::shutdown()
 {
-	m_taskLock.lock();
-	m_threadState = STATE_TERMINATED;
-	flush();
-	m_taskLock.unlock();
-}
+	Task* task = createTask([this]() {
+		setState(THREAD_STATE_TERMINATED);
+		taskSignal.notify_one();
+	});
 
-void Dispatcher::join()
-{
-	m_thread.join();
+	std::lock_guard<std::mutex> lockClass(taskLock);
+	taskList.push_back(task);
+
+	taskSignal.notify_one();
 }

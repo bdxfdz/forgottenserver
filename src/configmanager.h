@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,135 +17,115 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _CONFIG_MANAGER_H
-#define _CONFIG_MANAGER_H
-
-#include <string>
-
-extern "C"
-{
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-}
+#ifndef FS_CONFIGMANAGER_H_6BDD23BD0B8344F4B7C40E8BE6AF6F39
+#define FS_CONFIGMANAGER_H_6BDD23BD0B8344F4B7C40E8BE6AF6F39
 
 class ConfigManager
 {
 	public:
-		ConfigManager();
-		~ConfigManager();
-
 		enum boolean_config_t {
-			ON_OR_OFF_CHARLIST = 0,
-			ALLOW_CHANGEOUTFIT = 1,
-			CANNOT_ATTACK_SAME_LOOKFEET = 2,
-			ONE_PLAYER_ON_ACCOUNT = 3,
-			AIMBOT_HOTKEY_ENABLED = 4,
-			SHOW_GAMEMASTERS_ONLINE = 5,
-			REMOVE_AMMO = 6,
-			REMOVE_RUNE_CHARGES = 7,
-			REMOVE_WEAPON_CHARGES = 8,
-			EXPERIENCE_FROM_PLAYERS = 9,
-			SHUTDOWN_AT_SERVERSAVE = 10,
-			CLEAN_MAP_AT_SERVERSAVE = 11,
-			SERVERSAVE_ENABLED = 12,
-			FREE_PREMIUM = 13,
-			ADMIN_LOGS_ENABLED = 14,
-			SAVE_GLOBAL_STORAGE = 15,
-			REPLACE_KICK_ON_LOGIN = 16,
-			OLD_CONDITION_ACCURACY = 17,
-			FREE_MEMORY_AT_SHUTDOWN = 18,
-			ALLOW_CLONES = 19,
-			BIND_ONLY_GLOBAL_ADDRESS = 20,
-			OPTIMIZE_DATABASE = 21,
-			MARKET_ENABLED = 22,
-			MARKET_PREMIUM = 23,
-			STAMINA_SYSTEM = 24,
+			ALLOW_CHANGEOUTFIT,
+			ONE_PLAYER_ON_ACCOUNT,
+			AIMBOT_HOTKEY_ENABLED,
+			REMOVE_RUNE_CHARGES,
+			EXPERIENCE_FROM_PLAYERS,
+			FREE_PREMIUM,
+			REPLACE_KICK_ON_LOGIN,
+			ALLOW_CLONES,
+			BIND_ONLY_GLOBAL_ADDRESS,
+			OPTIMIZE_DATABASE,
+			MARKET_PREMIUM,
+			EMOTE_SPELLS,
+			STAMINA_SYSTEM,
+			WARN_UNSAFE_SCRIPTS,
+			CONVERT_UNSAFE_SCRIPTS,
+			CLASSIC_EQUIPMENT_SLOTS,
+			CLASSIC_ATTACK_SPEED,
+			SCRIPTS_CONSOLE_LOGS,
+			SERVER_SAVE_NOTIFY_MESSAGE,
+			SERVER_SAVE_CLEAN_MAP,
+			SERVER_SAVE_CLOSE,
+			SERVER_SAVE_SHUTDOWN,
+			ONLINE_OFFLINE_CHARLIST,
+			YELL_ALLOW_PREMIUM,
+			FORCE_MONSTERTYPE_LOAD,
+
 			LAST_BOOLEAN_CONFIG /* this must be the last one */
 		};
 
 		enum string_config_t {
-			DUMMY_STR = 0,
-			MAP_NAME = 1,
-			HOUSE_RENT_PERIOD = 2,
-			LOGIN_MSG = 3,
-			FIRST_MSG = 4,
-			SERVER_NAME = 5,
-			OWNER_NAME = 6,
-			OWNER_EMAIL = 7,
-			URL = 8,
-			LOCATION = 9,
-			IP = 10,
-			MOTD = 11,
-			WORLD_TYPE = 12,
-			MYSQL_HOST = 13,
-			MYSQL_USER = 14,
-			MYSQL_PASS = 15,
-			MYSQL_DB = 16,
-			DEFAULT_PRIORITY = 17,
-			PASSWORDTYPE = 18,
-			MAP_AUTHOR = 19,
+			MAP_NAME,
+			HOUSE_RENT_PERIOD,
+			SERVER_NAME,
+			OWNER_NAME,
+			OWNER_EMAIL,
+			URL,
+			LOCATION,
+			IP,
+			MOTD,
+			WORLD_TYPE,
+			MYSQL_HOST,
+			MYSQL_USER,
+			MYSQL_PASS,
+			MYSQL_DB,
+			MYSQL_SOCK,
+			DEFAULT_PRIORITY,
+			MAP_AUTHOR,
+
 			LAST_STRING_CONFIG /* this must be the last one */
 		};
 
 		enum integer_config_t {
-			LOGIN_TRIES = 0,
-			SQL_PORT = 1,
-			MAX_PLAYERS = 2,
-			PZ_LOCKED = 3,
-			DEFAULT_DESPAWNRANGE = 4,
-			DEFAULT_DESPAWNRADIUS = 5,
-			RATE_EXPERIENCE = 6,
-			RATE_SKILL = 7,
-			RATE_LOOT = 8,
-			RATE_MAGIC = 9,
-			RATE_SPAWN = 10,
-			SERVERSAVE_H = 11,
-			HOUSE_PRICE = 12,
-			KILLS_TO_RED = 13,
-			KILLS_TO_BLACK = 14,
-			MAX_MESSAGEBUFFER = 15,
-			ACTIONS_DELAY_INTERVAL = 16,
-			EX_ACTIONS_DELAY_INTERVAL = 17,
-			CRITICAL_HIT_CHANCE = 18,
-			KICK_AFTER_MINUTES = 19,
-			PROTECTION_LEVEL = 20,
-			DEATH_LOSE_PERCENT = 21,
-			PASSWORD_TYPE = 22,
-			STATUSQUERY_TIMEOUT = 23,
-			FRAG_TIME = 24,
-			WHITE_SKULL_TIME = 25,
-			AUTO_SAVE_EACH_MINUTES = 26,
-			ADMIN_PORT = 27,
-			GAME_PORT = 28,
-			LOGIN_PORT = 29,
-			STATUS_PORT = 30,
-			STAIRHOP_DELAY = 31,
-			MARKET_OFFER_DURATION = 32,
-			CHECK_EXPIRED_MARKET_OFFERS_EACH_MINUTES = 33,
-			MAX_MARKET_OFFERS_AT_A_TIME_PER_PLAYER = 34,
-			EXP_FROM_PLAYERS_LEVEL_RANGE = 35,
-			MAX_PACKETS_PER_SECOND = 36,
+			SQL_PORT,
+			MAX_PLAYERS,
+			PZ_LOCKED,
+			DEFAULT_DESPAWNRANGE,
+			DEFAULT_DESPAWNRADIUS,
+			RATE_EXPERIENCE,
+			RATE_SKILL,
+			RATE_LOOT,
+			RATE_MAGIC,
+			RATE_SPAWN,
+			HOUSE_PRICE,
+			KILLS_TO_RED,
+			KILLS_TO_BLACK,
+			MAX_MESSAGEBUFFER,
+			ACTIONS_DELAY_INTERVAL,
+			EX_ACTIONS_DELAY_INTERVAL,
+			KICK_AFTER_MINUTES,
+			PROTECTION_LEVEL,
+			DEATH_LOSE_PERCENT,
+			STATUSQUERY_TIMEOUT,
+			FRAG_TIME,
+			WHITE_SKULL_TIME,
+			GAME_PORT,
+			LOGIN_PORT,
+			STATUS_PORT,
+			STAIRHOP_DELAY,
+			MARKET_OFFER_DURATION,
+			CHECK_EXPIRED_MARKET_OFFERS_EACH_MINUTES,
+			MAX_MARKET_OFFERS_AT_A_TIME_PER_PLAYER,
+			EXP_FROM_PLAYERS_LEVEL_RANGE,
+			MAX_PACKETS_PER_SECOND,
+			SERVER_SAVE_NOTIFY_DURATION,
+			YELL_MINIMUM_LEVEL,
+
 			LAST_INTEGER_CONFIG /* this must be the last one */
 		};
 
 		bool load();
 		bool reload();
 
-		const std::string& getString(string_config_t _what) const;
-		int32_t getNumber(integer_config_t _what) const;
-		bool getBoolean(boolean_config_t _what) const;
-		bool setNumber(integer_config_t _what, int32_t _value);
+		const std::string& getString(string_config_t what) const;
+		int32_t getNumber(integer_config_t what) const;
+		bool getBoolean(boolean_config_t what) const;
 
 	private:
-		std::string getGlobalString(lua_State* _L, const std::string& _identifier, const std::string& _default = "");
-		int32_t getGlobalNumber(lua_State* _L, const std::string& _identifier, const int32_t _default = 0);
-		std::string getGlobalStringField(lua_State* _L, const std::string& _identifier, const int32_t _key, const std::string& _default = "");
+		std::string string[LAST_STRING_CONFIG] = {};
+		int32_t integer[LAST_INTEGER_CONFIG] = {};
+		bool boolean[LAST_BOOLEAN_CONFIG] = {};
 
-		bool m_isLoaded;
-		std::string m_confString[LAST_STRING_CONFIG];
-		int32_t m_confInteger[LAST_INTEGER_CONFIG];
-		bool m_confBoolean[LAST_BOOLEAN_CONFIG];
+		bool loaded = false;
 };
 
 #endif

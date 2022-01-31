@@ -9,6 +9,7 @@
 *.suo
 *.user
 *.sln.docstates
+.vscode/
 
 # Build results
 
@@ -52,8 +53,10 @@ ipch/
 *.aps
 *.ncb
 *.opensdf
+*.opendb
 *.sdf
 *.cachefile
+*.VC.db
 
 # Visual Studio profiler
 *.psess
@@ -163,3 +166,13 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+
+# Vim files
+*~
+.*.swp
+.*.swo
+
+#############
+## TFS / OT
+#############
+config.lua

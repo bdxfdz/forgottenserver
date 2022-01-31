@@ -1,11 +1,16 @@
 local upFloorIds = {1386, 3678, 5543}
-function onUse(cid, item, fromPosition, itemEx, toPosition)
-	if isInArray(upFloorIds, item.itemid) == TRUE then
-		fromPosition.y = fromPosition.y + 1
-		fromPosition.z = fromPosition.z - 1
+function onUse(player, item, fromPosition, target, toPosition, isHotkey)
+	if table.contains(upFloorIds, item.itemid) then
+		fromPosition:moveUpstairs()
 	else
 		fromPosition.z = fromPosition.z + 1
 	end
-	doTeleportThing(cid, fromPosition, FALSE)
-	return TRUE
+
+	if player:isPzLocked() and Tile(fromPosition):hasFlag(TILESTATE_PROTECTIONZONE) then
+		player:sendCancelMessage(RETURNVALUE_PLAYERISPZLOCKED)
+		return true
+	end
+
+	player:teleportTo(fromPosition, false)
+	return true
 end

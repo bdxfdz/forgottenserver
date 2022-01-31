@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,13 +25,6 @@
 
 extern Game g_game;
 
-Guild::Guild(uint32_t id, const std::string& name)
-{
-	this->id = id;
-	this->name = name;
-	this->memberCount = 0;
-}
-
 void Guild::addMember(Player* player)
 {
 	membersOnline.push_back(player);
@@ -42,41 +35,49 @@ void Guild::addMember(Player* player)
 
 void Guild::removeMember(Player* player)
 {
-	for (PlayerVector::iterator it = membersOnline.begin(); it != membersOnline.end(); ++it) {
-		if (*it == player) {
-			membersOnline.erase(it);
-			break;
-		}
-	}
-
+	membersOnline.remove(player);
 	for (Player* member : membersOnline) {
 		g_game.updatePlayerHelpers(*member);
 	}
-
 	g_game.updatePlayerHelpers(*player);
+
+	if (membersOnline.empty()) {
+		g_game.removeGuild(id);
+		delete this;
+	}
 }
 
-GuildRank* Guild::getRankById(uint32_t id)
+GuildRank* Guild::getRankById(uint32_t rankId)
 {
-	for (size_t i = 0; i < ranks.size(); ++i) {
-		if (ranks[i].id == id) {
-			return &ranks[i];
+	for (auto& rank : ranks) {
+		if (rank.id == rankId) {
+			return &rank;
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
-GuildRank* Guild::getRankByLevel(uint8_t level)
+const GuildRank* Guild::getRankByName(const std::string& name) const
 {
-	for (size_t i = 0; i < ranks.size(); ++i) {
-		if (ranks[i].level == level) {
-			return &ranks[i];
+	for (const auto& rank : ranks) {
+		if (rank.name == name) {
+			return &rank;
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
-void Guild::addRank(uint32_t id, const std::string& name, uint8_t level)
+const GuildRank* Guild::getRankByLevel(uint8_t level) const
 {
-	ranks.push_back(GuildRank(id, name, level));
+	for (const auto& rank : ranks) {
+		if (rank.level == level) {
+			return &rank;
+		}
+	}
+	return nullptr;
+}
+
+void Guild::addRank(uint32_t rankId, const std::string& rankName, uint8_t level)
+{
+	ranks.emplace_back(rankId, rankName, level);
 }

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,75 +17,40 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_TOOLS_H__
-#define __OTSERV_TOOLS_H__
+#ifndef FS_TOOLS_H_5F9A9742DA194628830AA1C64909AE43
+#define FS_TOOLS_H_5F9A9742DA194628830AA1C64909AE43
 
-#include "definitions.h"
+#include <random>
+
 #include "position.h"
 #include "const.h"
 #include "enums.h"
 
-#include <string>
-#include <algorithm>
+void printXMLError(const std::string& where, const std::string& fileName, const pugi::xml_parse_result& result);
 
-#include <libxml/parser.h>
-
-#include <boost/lexical_cast.hpp>
-#include <boost/tokenizer.hpp>
-
-typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
-
-enum DistributionType_t {
-	DISTRO_UNIFORM,
-	DISTRO_SQUARE,
-	DISTRO_NORMAL
-};
-
-std::string transformToMD5(const std::string& plainText);
-std::string transformToSHA1(const std::string& plainText);
-bool passwordTest(const std::string& plain, const std::string& hash);
+std::string transformToSHA1(const std::string& input);
+std::string generateToken(const std::string& key, uint32_t ticks);
 
 void replaceString(std::string& str, const std::string& sought, const std::string& replacement);
-void trim_right(std::string& source, const std::string& t);
-void trim_left(std::string& source, const std::string& t);
+void trim_right(std::string& source, char t);
+void trim_left(std::string& source, char t);
 void toLowerCaseString(std::string& source);
-void toUpperCaseString(std::string& source);
-std::string asLowerCaseString(const std::string& source);
-std::string asUpperCaseString(const std::string& source);
+std::string asLowerCaseString(std::string source);
+std::string asUpperCaseString(std::string source);
 
-bool utf8ToLatin1(const char* intext, std::string& outtext);
-bool readXMLInteger(xmlNodePtr node, const char* tag, int32_t& value);
-template<typename T>
-T readXMLValue(xmlNodePtr node, const char* tag)
-{
-	char* nodeValue = (char*)xmlGetProp(node, (xmlChar*)tag);
-	if (!nodeValue) {
-		return T();
-	}
+using StringVector = std::vector<std::string>;
+using IntegerVector = std::vector<int32_t>;
 
-	T value;
-	try {
-		value = boost::lexical_cast<T>(nodeValue);
-	} catch (boost::bad_lexical_cast&) {
-		value = T();
-	}
-	xmlFree(nodeValue);
-	return value;
+StringVector explodeString(const std::string& inString, const std::string& separator, int32_t limit = -1);
+IntegerVector vectorAtoi(const StringVector& stringVector);
+constexpr bool hasBitSet(uint32_t flag, uint32_t flags) {
+	return (flags & flag) != 0;
 }
-bool readXMLFloat(xmlNodePtr node, const char* tag, float& value);
-bool readXMLString(xmlNodePtr node, const char* tag, std::string& value);
-bool readXMLContentString(xmlNodePtr node, std::string& value);
 
-typedef std::vector<std::string> StringVec;
-typedef std::vector<int32_t> IntegerVec;
-
-StringVec explodeString(const std::string& inString, const std::string& separator, int32_t limit = -1);
-IntegerVec vectorAtoi(const StringVec& stringVector);
-bool hasBitSet(uint32_t flag, uint32_t flags);
-
-bool isNumber(char character);
-
-int random_range(int lowest_number, int highest_number, DistributionType_t type = DISTRO_UNIFORM);
+std::mt19937& getRandomGenerator();
+int32_t uniform_random(int32_t minNumber, int32_t maxNumber);
+int32_t normal_random(int32_t minNumber, int32_t maxNumber);
+bool boolean_random(double probability = 0.5);
 
 Direction getDirection(const std::string& string);
 Position getNextPosition(Direction direction, Position pos);
@@ -93,25 +58,23 @@ Direction getDirectionTo(const Position& from, const Position& to);
 
 std::string getFirstLine(const std::string& str);
 
-std::string parseParams(tokenizer::iterator& it, tokenizer::iterator end);
-
 std::string formatDate(time_t time);
 std::string formatDateShort(time_t time);
 std::string convertIPToString(uint32_t ip);
 
-std::string trimString(std::string& str);
+void trimString(std::string& str);
 
 MagicEffectClasses getMagicEffect(const std::string& strValue);
 ShootType_t getShootType(const std::string& strValue);
 Ammo_t getAmmoType(const std::string& strValue);
-AmmoAction_t getAmmoAction(const std::string& strValue);
-CombatType_t getCombatType(const std::string& strValue);
+WeaponAction_t getWeaponAction(const std::string& strValue);
+Skulls_t getSkullType(const std::string& strValue);
 std::string getCombatName(CombatType_t combatType);
 
-std::string getSkillName(uint16_t skillid);
-skills_t getSkillId(const std::string& param);
+std::string getSpecialSkillName(uint8_t skillid);
+std::string getSkillName(uint8_t skillid);
 
-uint32_t adlerChecksum(uint8_t* data, size_t len);
+uint32_t adlerChecksum(const uint8_t* data, size_t length);
 
 std::string ucfirst(std::string str);
 std::string ucwords(std::string str);
@@ -119,14 +82,18 @@ bool booleanString(const std::string& str);
 
 std::string getWeaponName(WeaponType_t weaponType);
 
-uint32_t combatTypeToIndex(CombatType_t combatType);
-CombatType_t indexToCombatType(uint32_t v);
+size_t combatTypeToIndex(CombatType_t combatType);
+CombatType_t indexToCombatType(size_t v);
 
 uint8_t serverFluidToClient(uint8_t serverFluid);
 uint8_t clientFluidToServer(uint8_t clientFluid);
 
 itemAttrTypes stringToItemAttribute(const std::string& str);
 
-double round(double v);
+const char* getReturnMessage(ReturnValue value);
+
+int64_t OTSYS_TIME();
+
+SpellGroup_t stringToSpellGroup(std::string value);
 
 #endif

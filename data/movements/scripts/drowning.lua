@@ -1,14 +1,21 @@
-local condition = createConditionObject(CONDITION_DROWN)
-setConditionParam(condition, CONDITION_PARAM_PERIODICDAMAGE, -20)
-setConditionParam(condition, CONDITION_PARAM_TICKS, -1)
-setConditionParam(condition, CONDITION_PARAM_TICKINTERVAL, 2000)
+local condition = Condition(CONDITION_DROWN)
+condition:setParameter(CONDITION_PARAM_PERIODICDAMAGE, -20)
+condition:setParameter(CONDITION_PARAM_TICKS, -1)
+condition:setParameter(CONDITION_PARAM_TICKINTERVAL, 2000)
 
-function onStepIn(cid, item, pos)
-	if isPlayer(cid) == TRUE then
-		doAddCondition(cid, condition)
+function onStepIn(creature, item, position, fromPosition)
+	if creature:isPlayer() then
+		if math.random(1, 10) == 1 then
+			position:sendMagicEffect(CONST_ME_BUBBLES)
+		end
+		creature:addCondition(condition)
 	end
+	return true
 end
 
-function onStepOut(cid, item, pos)
-	doRemoveCondition(cid, CONDITION_DROWN)
+function onStepOut(creature, item, position, fromPosition)
+	if not creature:isPlayer() then
+		creature:removeCondition(CONDITION_DROWN)
+	end
+	return true
 end

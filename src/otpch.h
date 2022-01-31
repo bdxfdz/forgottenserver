@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,40 +17,28 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifdef __OTPCH_H__
-#error "Precompiled header should only be included once."
-#endif
-
-#define __OTPCH_H__
-
-//#undef __USE_OTPCH__
+#define FS_OTPCH_H_F00C737DA6CA4C8D90F57430C614367F
 
 // Definitions should be global.
 #include "definitions.h"
 
-#ifdef WIN32
-#include <winerror.h>
-#endif
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <forward_list>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <list>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
-//libxml
-#include <libxml/xmlmemory.h>
-#include <libxml/parser.h>
-#include <libxml/threads.h>
-//boost
-#include <boost/config.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
-#include <boost/tokenizer.hpp>
 #include <boost/asio.hpp>
 
-//std
-//#include <list>
-//#include <vector>
-//#include <map>
-//#include <string>
-
-//otserv
-#include "configmanager.h"
-#include "thing.h"
-
+#include <pugixml.hpp>

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,68 +17,63 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_POS_H
-#define __OTSERV_POS_H
+#ifndef FS_POSITION_H_5B684192F7034FB8857C8280D2CC6C75
+#define FS_POSITION_H_5B684192F7034FB8857C8280D2CC6C75
 
-#include "definitions.h"
+enum Direction : uint8_t {
+	DIRECTION_NORTH = 0,
+	DIRECTION_EAST = 1,
+	DIRECTION_SOUTH = 2,
+	DIRECTION_WEST = 3,
 
-#include <cstdlib>
-#include <iostream>
+	DIRECTION_DIAGONAL_MASK = 4,
+	DIRECTION_SOUTHWEST = DIRECTION_DIAGONAL_MASK | 0,
+	DIRECTION_SOUTHEAST = DIRECTION_DIAGONAL_MASK | 1,
+	DIRECTION_NORTHWEST = DIRECTION_DIAGONAL_MASK | 2,
+	DIRECTION_NORTHEAST = DIRECTION_DIAGONAL_MASK | 3,
 
-enum Direction {
-	NORTH = 0,
-	EAST = 1,
-	SOUTH = 2,
-	WEST = 3,
-	SOUTHWEST = 4,
-	SOUTHEAST = 5,
-	NORTHWEST = 6,
-	NORTHEAST = 7,
-	SOUTH_ALT = 8,
-	EAST_ALT = 9,
-	NODIR = 10
+	DIRECTION_LAST = DIRECTION_NORTHEAST,
+	DIRECTION_NONE = 8,
 };
 
 struct Position
 {
-	Position() : x(0), y(0), z(0) {}
-	Position(uint16_t _x, uint16_t _y, uint8_t _z)
-		: x(_x), y(_y), z(_z) {}
-	~Position() {}
+	constexpr Position() = default;
+	constexpr Position(uint16_t x, uint16_t y, uint8_t z) : x(x), y(y), z(z) {}
 
 	template<int_fast32_t deltax, int_fast32_t deltay>
-	inline static bool areInRange(const Position& p1, const Position& p2) {
+	static bool areInRange(const Position& p1, const Position& p2) {
 		return Position::getDistanceX(p1, p2) <= deltax && Position::getDistanceY(p1, p2) <= deltay;
 	}
 
 	template<int_fast32_t deltax, int_fast32_t deltay, int_fast16_t deltaz>
-	inline static bool areInRange(const Position& p1, const Position& p2) {
+	static bool areInRange(const Position& p1, const Position& p2) {
 		return Position::getDistanceX(p1, p2) <= deltax && Position::getDistanceY(p1, p2) <= deltay && Position::getDistanceZ(p1, p2) <= deltaz;
 	}
 
-	inline static int_fast32_t getOffsetX(const Position& p1, const Position& p2) {
+	static int_fast32_t getOffsetX(const Position& p1, const Position& p2) {
 		return p1.getX() - p2.getX();
 	}
-	inline static int_fast32_t getOffsetY(const Position& p1, const Position& p2) {
+	static int_fast32_t getOffsetY(const Position& p1, const Position& p2) {
 		return p1.getY() - p2.getY();
 	}
-	inline static int_fast16_t getOffsetZ(const Position& p1, const Position& p2) {
+	static int_fast16_t getOffsetZ(const Position& p1, const Position& p2) {
 		return p1.getZ() - p2.getZ();
 	}
 
-	inline static int32_t getDistanceX(const Position& p1, const Position& p2) {
+	static int32_t getDistanceX(const Position& p1, const Position& p2) {
 		return std::abs(Position::getOffsetX(p1, p2));
 	}
-	inline static int32_t getDistanceY(const Position& p1, const Position& p2) {
+	static int32_t getDistanceY(const Position& p1, const Position& p2) {
 		return std::abs(Position::getOffsetY(p1, p2));
 	}
-	inline static int16_t getDistanceZ(const Position& p1, const Position& p2) {
+	static int16_t getDistanceZ(const Position& p1, const Position& p2) {
 		return std::abs(Position::getOffsetZ(p1, p2));
 	}
 
-	uint16_t x;
-	uint16_t y;
-	uint8_t z;
+	uint16_t x = 0;
+	uint16_t y = 0;
+	uint8_t z = 0;
 
 	bool operator<(const Position& p) const {
 		if (z < p.z) {
@@ -128,43 +123,12 @@ struct Position
 		return Position(x - p1.x, y - p1.y, z - p1.z);
 	}
 
-	inline int_fast32_t getX() const { return x; }
-	inline int_fast32_t getY() const { return y; }
-	inline int_fast16_t getZ() const { return z; }
+	int_fast32_t getX() const { return x; }
+	int_fast32_t getY() const { return y; }
+	int_fast16_t getZ() const { return z; }
 };
 
 std::ostream& operator<<(std::ostream&, const Position&);
 std::ostream& operator<<(std::ostream&, const Direction&);
-
-struct PositionEx : public Position
-{
-	PositionEx() {}
-	~PositionEx() {}
-
-	PositionEx(uint16_t _x, uint16_t _y, uint8_t _z, int32_t _stackpos)
-		: Position(_x, _y, _z), stackpos(_stackpos) {}
-
-	PositionEx(uint16_t _x, uint16_t _y, uint8_t _z)
-		: Position(_x, _y, _z), stackpos(0) {}
-
-	PositionEx(const Position& p)
-		: Position(p.x, p.y, p.z), stackpos(0) {}
-
-	PositionEx(const PositionEx& p)
-		: Position(p.x, p.y, p.z), stackpos(p.stackpos) {}
-
-	PositionEx(const Position& p, int32_t _stackpos)
-		: Position(p.x, p.y, p.z), stackpos(_stackpos) {}
-
-	int32_t stackpos;
-
-	bool operator==(const PositionEx& p)  const {
-		return p.x == x && p.y == y && p.z == z && p.stackpos == stackpos;
-	}
-
-	bool operator!=(const PositionEx& p)  const {
-		return p.x != x || p.y != y || p.z != z || p.stackpos != stackpos;
-	}
-};
 
 #endif

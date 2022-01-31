@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,121 +17,110 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_SERVER_H__
-#define __OTSERV_SERVER_H__
+#ifndef FS_SERVER_H_984DA68ABF744127850F90CC710F281B
+#define FS_SERVER_H_984DA68ABF744127850F90CC710F281B
 
-#include "definitions.h"
-#include <iostream>
-#include <boost/bind.hpp>
-#include <boost/asio.hpp>
-#include <boost/utility.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <list>
+#include "connection.h"
+#include "signals.h"
+#include <memory>
 
-class Connection;
-typedef boost::shared_ptr<Connection> Connection_ptr;
 class Protocol;
-class NetworkMessage;
 
-class ServiceBase;
-class ServicePort;
-
-typedef boost::shared_ptr<ServiceBase> Service_ptr;
-typedef boost::shared_ptr<ServicePort> ServicePort_ptr;
-
-class ServiceBase : boost::noncopyable
+class ServiceBase
 {
 	public:
-		virtual ~ServiceBase() {} // Redundant, but stifles compiler warnings
-
 		virtual bool is_single_socket() const = 0;
 		virtual bool is_checksummed() const = 0;
 		virtual uint8_t get_protocol_identifier() const = 0;
 		virtual const char* get_protocol_name() const = 0;
 
-		virtual Protocol* make_protocol(Connection_ptr c) const = 0;
+		virtual Protocol_ptr make_protocol(const Connection_ptr& c) const = 0;
 };
 
 template <typename ProtocolType>
-class Service : public ServiceBase
+class Service final : public ServiceBase
 {
 	public:
-		bool is_single_socket() const {
+		bool is_single_socket() const override {
 			return ProtocolType::server_sends_first;
 		}
-		bool is_checksummed() const {
+		bool is_checksummed() const override {
 			return ProtocolType::use_checksum;
 		}
-		uint8_t get_protocol_identifier() const {
+		uint8_t get_protocol_identifier() const override {
 			return ProtocolType::protocol_identifier;
 		}
-		const char* get_protocol_name() const {
+		const char* get_protocol_name() const override {
 			return ProtocolType::protocol_name();
 		}
 
-		Protocol* make_protocol(Connection_ptr c) const {
-			return new ProtocolType(c);
+		Protocol_ptr make_protocol(const Connection_ptr& c) const override {
+			return std::make_shared<ProtocolType>(c);
 		}
 };
 
-class ServicePort : boost::noncopyable, public boost::enable_shared_from_this<ServicePort>
+class ServicePort : public std::enable_shared_from_this<ServicePort>
 {
 	public:
-		ServicePort(boost::asio::io_service& io_service);
+		explicit ServicePort(boost::asio::io_service& io_service) : io_service(io_service) {}
 		~ServicePort();
 
-		static void openAcceptor(boost::weak_ptr<ServicePort> weak_service, uint16_t port);
+		// non-copyable
+		ServicePort(const ServicePort&) = delete;
+		ServicePort& operator=(const ServicePort&) = delete;
+
+		static void openAcceptor(std::weak_ptr<ServicePort> weak_service, uint16_t port);
 		void open(uint16_t port);
 		void close();
 		bool is_single_socket() const;
 		std::string get_protocol_names() const;
 
-		bool add_service(Service_ptr);
-		Protocol* make_protocol(bool checksummed, NetworkMessage& msg) const;
+		bool add_service(const Service_ptr& new_svc);
+		Protocol_ptr make_protocol(bool checksummed, NetworkMessage& msg, const Connection_ptr& connection) const;
 
 		void onStopServer();
-		void onAccept(boost::asio::ip::tcp::socket* socket, const boost::system::error_code& error);
+		void onAccept(Connection_ptr connection, const boost::system::error_code& error);
 
-	protected:
+	private:
 		void accept();
 
-		boost::asio::io_service& m_io_service;
-		boost::asio::ip::tcp::acceptor* m_acceptor;
-		std::vector<Service_ptr> m_services;
+		boost::asio::io_service& io_service;
+		std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor;
+		std::vector<Service_ptr> services;
 
-		uint16_t m_serverPort;
-		bool m_pendingStart;
+		uint16_t serverPort = 0;
+		bool pendingStart = false;
 };
 
-typedef boost::shared_ptr<ServicePort> ServicePort_ptr;
-class ServiceManager : boost::noncopyable
+class ServiceManager
 {
-		ServiceManager(const ServiceManager&);
 	public:
-		ServiceManager();
+		ServiceManager() = default;
 		~ServiceManager();
+
+		// non-copyable
+		ServiceManager(const ServiceManager&) = delete;
+		ServiceManager& operator=(const ServiceManager&) = delete;
 
 		void run();
 		void stop();
-
-		bool okay();
 
 		template <typename ProtocolType>
 		bool add(uint16_t port);
 
 		bool is_running() const {
-			return m_acceptors.empty() == false;
+			return acceptors.empty() == false;
 		}
-		std::list<uint16_t> get_ports() const;
 
-	protected:
+	private:
 		void die();
 
-		std::map<uint16_t, ServicePort_ptr> m_acceptors;
+		std::unordered_map<uint16_t, ServicePort_ptr> acceptors;
 
-		boost::asio::io_service m_io_service;
-		boost::asio::deadline_timer death_timer;
-		bool running;
+		boost::asio::io_service io_service;
+		Signals signals{io_service};
+		boost::asio::deadline_timer death_timer { io_service };
+		bool running = false;
 };
 
 template <typename ProtocolType>
@@ -144,25 +133,24 @@ bool ServiceManager::add(uint16_t port)
 
 	ServicePort_ptr service_port;
 
-	std::map<uint16_t, ServicePort_ptr>::iterator finder =
-	    m_acceptors.find(port);
+	auto foundServicePort = acceptors.find(port);
 
-	if (finder == m_acceptors.end()) {
-		service_port.reset(new ServicePort(m_io_service));
+	if (foundServicePort == acceptors.end()) {
+		service_port = std::make_shared<ServicePort>(io_service);
 		service_port->open(port);
-		m_acceptors[port] = service_port;
+		acceptors[port] = service_port;
 	} else {
-		service_port = finder->second;
+		service_port = foundServicePort->second;
 
 		if (service_port->is_single_socket() || ProtocolType::server_sends_first) {
 			std::cout << "ERROR: " << ProtocolType::protocol_name() <<
 			          " and " << service_port->get_protocol_names() <<
-			          " cannot use the same port " << port << "." << std::endl;
+			          " cannot use the same port " << port << '.' << std::endl;
 			return false;
 		}
 	}
 
-	return service_port->add_service(Service_ptr(new Service<ProtocolType>()));
+	return service_port->add_service(std::make_shared<Service<ProtocolType>>());
 }
 
 #endif

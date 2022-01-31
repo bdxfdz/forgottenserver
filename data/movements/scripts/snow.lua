@@ -1,11 +1,13 @@
-function onStepOut(cid, item, position, fromPosition)
-	if isPlayer(cid) and not isPlayerGhost(cid) then
-		if item.itemid == 670 then
-			doTransformItem(item.uid, 6594)
-		else
-			doTransformItem(item.uid, item.itemid + 15)
-		end
-		doDecayItem(item.uid)
+function onStepOut(creature, item, position, fromPosition)
+	if creature:isPlayer() and creature:isInGhostMode() then
+		return true
 	end
+
+	if item:getId() == 670 then
+		item:transform(6594)
+	else
+		item:transform(item.itemid + 15)
+	end
+	item:decay()
 	return true
 end

@@ -1,6 +1,10 @@
-function onStepIn(cid, item, position, fromPosition)
-	if item.actionid > 30020 and item.actionid < 30100 then
-		doPlayerSetTown(cid, item.actionid - 30020)
+function onStepIn(creature, item, position, fromPosition)
+	if item.actionid > 30020 and item.actionid < 30050 then
+		if not creature:isPlayer() then
+			return false
+		end
+
+		creature:setTown(Town(item.actionid - 30020))
 	end
-	return TRUE
+	return true
 end

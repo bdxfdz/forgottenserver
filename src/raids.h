@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,53 +17,44 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_RAIDS_H__
-#define __OTSERV_RAIDS_H__
+#ifndef FS_RAIDS_H_3583C7C054584881856D55765DEDAFA9
+#define FS_RAIDS_H_3583C7C054584881856D55765DEDAFA9
 
-#include <string>
-#include <vector>
-#include <list>
-
-#include "definitions.h"
 #include "const.h"
 #include "position.h"
 #include "baseevents.h"
 
-#include <libxml/xmlmemory.h>
-#include <libxml/parser.h>
-
 enum RaidState_t {
-	RAIDSTATE_IDLE = 0,
-	RAIDSTATE_EXECUTING
+	RAIDSTATE_IDLE,
+	RAIDSTATE_EXECUTING,
 };
 
 struct MonsterSpawn {
+	MonsterSpawn(std::string name, uint32_t minAmount, uint32_t maxAmount) :
+		name(std::move(name)), minAmount(minAmount), maxAmount(maxAmount) {}
+
 	std::string name;
 	uint32_t minAmount;
 	uint32_t maxAmount;
 };
 
 //How many times it will try to find a tile to add the monster to before giving up
-#define MAXIMUM_TRIES_PER_MONSTER 10
-#define CHECK_RAIDS_INTERVAL 60
-#define RAID_MINTICKS 1000
+static constexpr int32_t MAXIMUM_TRIES_PER_MONSTER = 10;
+static constexpr int32_t CHECK_RAIDS_INTERVAL = 60;
+static constexpr int32_t RAID_MINTICKS = 1000;
 
 class Raid;
 class RaidEvent;
 
-typedef std::list<Raid*> RaidList;
-typedef std::vector<RaidEvent*> RaidEventVector;
-typedef std::list<MonsterSpawn*> MonsterSpawnList;
-
 class Raids
 {
 	public:
-		static Raids* getInstance() {
-			static Raids instance;
-			return &instance;
-		}
-
+		Raids();
 		~Raids();
+
+		// non-copyable
+		Raids(const Raids&) = delete;
+		Raids& operator=(const Raids&) = delete;
 
 		bool loadFromXml();
 		bool startup();
@@ -97,27 +88,32 @@ class Raids
 		void checkRaids();
 
 		LuaScriptInterface& getScriptInterface() {
-			return m_scriptInterface;
+			return scriptInterface;
 		}
 
 	private:
-		Raids();
-		RaidList raidList;
-		bool loaded, started;
-		Raid* running;
-		uint64_t lastRaidEnd;
-		uint32_t checkRaidsEvent;
+		LuaScriptInterface scriptInterface{"Raid Interface"};
 
-		LuaScriptInterface m_scriptInterface;
+		std::list<Raid*> raidList;
+		Raid* running = nullptr;
+		uint64_t lastRaidEnd = 0;
+		uint32_t checkRaidsEvent = 0;
+		bool loaded = false;
+		bool started = false;
 };
 
 class Raid
 {
 	public:
-		Raid(const std::string& _name, uint32_t _interval, uint32_t _marginTime);
+		Raid(std::string name, uint32_t interval, uint32_t marginTime, bool repeat) :
+			name(std::move(name)), interval(interval), margin(marginTime), repeat(repeat) {}
 		~Raid();
 
-		bool loadFromXml(const std::string& _filename);
+		// non-copyable
+		Raid(const Raid&) = delete;
+		Raid& operator=(const Raid&) = delete;
+
+		bool loadFromXml(const std::string& filename);
 
 		void startRaid();
 
@@ -128,11 +124,9 @@ class Raid
 		void setState(RaidState_t newState) {
 			state = newState;
 		}
-		std::string getName() const {
+		const std::string& getName() const {
 			return name;
 		}
-
-		void addEvent(RaidEvent* event);
 
 		bool isLoaded() const {
 			return loaded;
@@ -143,112 +137,92 @@ class Raid
 		uint32_t getInterval() const {
 			return interval;
 		}
+		bool canBeRepeated() const {
+			return repeat;
+		}
 
 		void stopEvents();
 
 	private:
-		RaidEventVector raidEvents;
+		std::vector<RaidEvent*> raidEvents;
 		std::string name;
 		uint32_t interval;
-		uint32_t nextEvent;
+		uint32_t nextEvent = 0;
 		uint64_t margin;
-		RaidState_t state;
-		uint32_t nextEventEvent;
-		bool loaded;
+		RaidState_t state = RAIDSTATE_IDLE;
+		uint32_t nextEventEvent = 0;
+		bool loaded = false;
+		bool repeat;
 };
 
 class RaidEvent
 {
 	public:
-		RaidEvent() {}
-		virtual ~RaidEvent() {}
+		virtual ~RaidEvent() = default;
 
-		virtual bool configureRaidEvent(xmlNodePtr eventNode);
+		virtual bool configureRaidEvent(const pugi::xml_node& eventNode);
 
-		virtual bool executeEvent() {
-			return false;
-		}
+		virtual bool executeEvent() = 0;
 		uint32_t getDelay() const {
-			return m_delay;
-		}
-		void setDelay(uint32_t newDelay) {
-			m_delay = newDelay;
-		}
-
-		static bool compareEvents(const RaidEvent* lhs, const RaidEvent* rhs) {
-			return lhs->getDelay() < rhs->getDelay();
+			return delay;
 		}
 
 	private:
-		uint32_t m_delay;
+		uint32_t delay;
 };
 
-class AnnounceEvent : public RaidEvent
+class AnnounceEvent final : public RaidEvent
 {
 	public:
-		AnnounceEvent() {
-			m_messageType = MSG_EVENT_ADVANCE;
-		}
-		virtual ~AnnounceEvent() {}
+		AnnounceEvent() = default;
 
-		virtual bool configureRaidEvent(xmlNodePtr eventNode);
+		bool configureRaidEvent(const pugi::xml_node& eventNode) override;
 
-		virtual bool executeEvent();
+		bool executeEvent() override;
 
 	private:
-		std::string m_message;
-		MessageClasses m_messageType;
+		std::string message;
+		MessageClasses messageType = MESSAGE_EVENT_ADVANCE;
 };
 
-class SingleSpawnEvent : public RaidEvent
+class SingleSpawnEvent final : public RaidEvent
 {
 	public:
-		SingleSpawnEvent() {}
-		virtual ~SingleSpawnEvent() {}
+		bool configureRaidEvent(const pugi::xml_node& eventNode) override;
 
-		virtual bool configureRaidEvent(xmlNodePtr eventNode);
-
-		virtual bool executeEvent();
+		bool executeEvent() override;
 
 	private:
-		std::string m_monsterName;
-		Position m_position;
+		std::string monsterName;
+		Position position;
 };
 
-class AreaSpawnEvent : public RaidEvent
+class AreaSpawnEvent final : public RaidEvent
 {
 	public:
-		AreaSpawnEvent() {}
-		virtual ~AreaSpawnEvent();
+		bool configureRaidEvent(const pugi::xml_node& eventNode) override;
 
-		virtual bool configureRaidEvent(xmlNodePtr eventNode);
-
-		void addMonster(MonsterSpawn* monsterSpawn);
-		void addMonster(const std::string& monsterName, uint32_t minAmount, uint32_t maxAmount);
-
-		virtual bool executeEvent();
+		bool executeEvent() override;
 
 	private:
-		MonsterSpawnList m_spawnList;
-		Position m_fromPos, m_toPos;
+		std::list<MonsterSpawn> spawnList;
+		Position fromPos, toPos;
 };
 
-class ScriptEvent : public RaidEvent, public Event
+class ScriptEvent final : public RaidEvent, public Event
 {
 	public:
-		ScriptEvent(LuaScriptInterface* _interface);
-		ScriptEvent(const ScriptEvent* copy);
-		~ScriptEvent() {}
+		explicit ScriptEvent(LuaScriptInterface* interface) : Event(interface) {}
 
-		virtual bool configureRaidEvent(xmlNodePtr eventNode);
-		virtual bool configureEvent(xmlNodePtr p) {
+		bool configureRaidEvent(const pugi::xml_node& eventNode) override;
+		bool configureEvent(const pugi::xml_node&) override {
 			return false;
 		}
 
-		bool executeEvent();
+		bool executeEvent() override;
 
-	protected:
-		virtual std::string getScriptEventName();
+	private:
+		std::string getScriptEventName() const override;
 };
 
 #endif

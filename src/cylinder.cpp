@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,47 +23,47 @@
 
 VirtualCylinder* VirtualCylinder::virtualCylinder = new VirtualCylinder;
 
-int32_t Cylinder::__getIndexOfThing(const Thing* thing) const
+int32_t Cylinder::getThingIndex(const Thing*) const
 {
 	return -1;
 }
 
-int32_t Cylinder::__getFirstIndex() const
-{
-	return -1;
-}
-
-int32_t Cylinder::__getLastIndex() const
-{
-	return -1;
-}
-
-uint32_t Cylinder::__getItemTypeCount(uint16_t itemId, int32_t subType /*= -1*/) const
+size_t Cylinder::getFirstIndex() const
 {
 	return 0;
 }
 
-std::map<uint32_t, uint32_t>& Cylinder::__getAllItemTypeCount(std::map<uint32_t, uint32_t>& countMap) const
+size_t Cylinder::getLastIndex() const
+{
+	return 0;
+}
+
+uint32_t Cylinder::getItemTypeCount(uint16_t, int32_t) const
+{
+	return 0;
+}
+
+std::map<uint32_t, uint32_t>& Cylinder::getAllItemTypeCount(std::map<uint32_t, uint32_t>& countMap) const
 {
 	return countMap;
 }
 
-Thing* Cylinder::__getThing(uint32_t index) const
+Thing* Cylinder::getThing(size_t) const
 {
-	return NULL;
+	return nullptr;
 }
 
-void Cylinder::__internalAddThing(Thing* thing)
-{
-	//
-}
-
-void Cylinder::__internalAddThing(uint32_t index, Thing* thing)
+void Cylinder::internalAddThing(Thing*)
 {
 	//
 }
 
-void Cylinder::__startDecaying()
+void Cylinder::internalAddThing(uint32_t, Thing*)
+{
+	//
+}
+
+void Cylinder::startDecaying()
 {
 	//
 }

@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,43 +17,26 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __IOMAPSERIALIZE_H__
-#define __IOMAPSERIALIZE_H__
+#ifndef FS_IOMAPSERIALIZE_H_7E903658F34E44F9BE03A713B55A3D6D
+#define FS_IOMAPSERIALIZE_H_7E903658F34E44F9BE03A713B55A3D6D
 
 #include "database.h"
 #include "map.h"
 
-#include <string>
-
 class IOMapSerialize
 {
 	public:
-		IOMapSerialize() {}
-		~IOMapSerialize() {}
+		static void loadHouseItems(Map* map);
+		static bool saveHouseItems();
+		static bool loadHouseInfo();
+		static bool saveHouseInfo();
 
-		bool loadMap(Map* map);
-		bool saveMap(Map* map);
-		bool loadHouseInfo(Map* map);
-		bool saveHouseInfo(Map* map);
+	private:
+		static void saveItem(PropWriteStream& stream, const Item* item);
+		static void saveTile(PropWriteStream& stream, const Tile* tile);
 
-	protected:
-		// Relational storage uses a row for each item/tile
-		bool loadMapRelational(Map* map);
-		bool saveMapRelational(Map* map);
-
-		void loadMapBinary(Map* map);
-		bool saveMapBinary(Map* map);
-
-		void loadMapBinaryTileBased(Map* map);
-		bool saveMapBinaryTileBased(Map* map);
-
-		void saveItem(PropWriteStream& stream, const Item* item);
-		void saveTile(PropWriteStream& stream, const Tile* tile);
-
-		bool loadContainer(PropStream& propStream, Container* container);
-		bool loadItem(PropStream& propStream, Cylinder* parent);
-		bool saveTile(Database* db, uint32_t tileId, const Tile* tile);
-		bool loadTile(Database& db, Tile* tile);
+		static bool loadContainer(PropStream& propStream, Container* container);
+		static bool loadItem(PropStream& propStream, Cylinder* parent);
 };
 
 #endif

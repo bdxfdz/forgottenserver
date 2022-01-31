@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,28 +17,34 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_WEAPONS_H__
-#define __OTSERV_WEAPONS_H__
+#ifndef FS_WEAPONS_H_69D1993478AA42948E24C0B90B8F5BF5
+#define FS_WEAPONS_H_69D1993478AA42948E24C0B90B8F5BF5
 
-#include "game.h"
 #include "luascript.h"
 #include "player.h"
-#include "actions.h"
-#include "talkaction.h"
 #include "baseevents.h"
 #include "combat.h"
 #include "const.h"
+#include "vocation.h"
+
+extern Vocations g_vocations;
 
 class Weapon;
 class WeaponMelee;
 class WeaponDistance;
 class WeaponWand;
 
-class Weapons : public BaseEvents
+using Weapon_ptr = std::unique_ptr<Weapon>;
+
+class Weapons final : public BaseEvents
 {
 	public:
 		Weapons();
-		virtual ~Weapons();
+		~Weapons();
+
+		// non-copyable
+		Weapons(const Weapons&) = delete;
+		Weapons& operator=(const Weapons&) = delete;
 
 		void loadDefaults();
 		const Weapon* getWeapon(const Item* item) const;
@@ -46,166 +52,260 @@ class Weapons : public BaseEvents
 		static int32_t getMaxMeleeDamage(int32_t attackSkill, int32_t attackValue);
 		static int32_t getMaxWeaponDamage(uint32_t level, int32_t attackSkill, int32_t attackValue, float attackFactor);
 
-	protected:
-		virtual void clear();
-		virtual LuaScriptInterface& getScriptInterface();
-		virtual std::string getScriptBaseName();
-		virtual Event* getEvent(const std::string& nodeName);
-		virtual bool registerEvent(Event* event, xmlNodePtr p);
+		bool registerLuaEvent(Weapon* event);
+		void clear(bool fromLua) override final;
 
-		typedef std::map<uint32_t, Weapon*> WeaponMap;
-		WeaponMap weapons;
+	private:
+		LuaScriptInterface& getScriptInterface() override;
+		std::string getScriptBaseName() const override;
+		Event_ptr getEvent(const std::string& nodeName) override;
+		bool registerEvent(Event_ptr event, const pugi::xml_node& node) override;
 
-		LuaScriptInterface m_scriptInterface;
+		std::map<uint32_t, Weapon*> weapons;
+
+		LuaScriptInterface scriptInterface { "Weapon Interface" };
 };
 
 class Weapon : public Event
 {
 	public:
-		Weapon(LuaScriptInterface* _interface);
-		virtual ~Weapon();
+		explicit Weapon(LuaScriptInterface* interface) : Event(interface) {}
 
-		virtual bool configureEvent(xmlNodePtr p);
-		virtual bool loadFunction(const std::string& functionName);
-		virtual bool configureWeapon(const ItemType& it);
+		bool configureEvent(const pugi::xml_node& node) override;
+		bool loadFunction(const pugi::xml_attribute&, bool) final {
+			return true;
+		}
+		virtual void configureWeapon(const ItemType& it);
 		virtual bool interruptSwing() const {
 			return false;
 		}
 
-		virtual int32_t playerWeaponCheck(Player* player, Creature* target) const;
+		int32_t playerWeaponCheck(Player* player, Creature* target, uint8_t shootRange) const;
 		static bool useFist(Player* player, Creature* target);
 		virtual bool useWeapon(Player* player, Item* item, Creature* target) const;
 
-		void setCombatParam(const CombatParams& _params);
+		virtual int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const = 0;
+		virtual int32_t getElementDamage(const Player* player, const Creature* target, const Item* item) const = 0;
+		virtual CombatType_t getElementType() const = 0;
 
 		uint16_t getID() const {
 			return id;
 		}
-		virtual int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const = 0;
+		void setID(uint16_t newId) {
+			id = newId;
+		}
 
 		uint32_t getReqLevel() const {
 			return level;
 		}
-		int32_t getReqMagLv() const {
+		void setRequiredLevel(uint32_t reqlvl) {
+			level = reqlvl;
+		}
+
+		uint32_t getReqMagLv() const {
 			return magLevel;
 		}
-		bool hasExhaustion() const {
-			return exhaustion != 0;
+		void setRequiredMagLevel(uint32_t reqlvl) {
+			magLevel = reqlvl;
 		}
+
 		bool isPremium() const {
 			return premium;
 		}
+		void setNeedPremium(bool prem) {
+			premium = prem;
+		}
+
 		bool isWieldedUnproperly() const {
 			return wieldUnproperly;
 		}
+		void setWieldUnproperly(bool unproperly) {
+			wieldUnproperly = unproperly;
+		}
+
+		uint32_t getMana() const {
+			return mana;
+		}
+		void setMana(uint32_t m) {
+			mana = m;
+		}
+
+		uint32_t getManaPercent() const {
+			return manaPercent;
+		}
+		void setManaPercent(uint32_t m) {
+			manaPercent = m;
+		}
+
+		int32_t getHealth() const {
+			return health;
+		}
+		void setHealth(int32_t h) {
+			health = h;
+		}
+
+		uint32_t getHealthPercent() const {
+			return healthPercent;
+		}
+		void setHealthPercent(uint32_t m) {
+			healthPercent = m;
+		}
+
+		uint32_t getSoul() const {
+			return soul;
+		}
+		void setSoul(uint32_t s) {
+			soul = s;
+		}
+
+		uint8_t getBreakChance() const {
+			return breakChance;
+		}
+		void setBreakChance(uint8_t b) {
+			breakChance = b;
+		}
+
+		bool isEnabled() const {
+			return enabled;
+		}
+		void setIsEnabled(bool e) {
+			enabled = e;
+		}
+
+		uint32_t getWieldInfo() const {
+			return wieldInfo;
+		}
+		void setWieldInfo(uint32_t info) {
+			wieldInfo |= info;
+		}
+
+		void addVocWeaponMap(std::string vocName) {
+			int32_t vocationId = g_vocations.getVocationId(vocName);
+			if (vocationId != -1) {
+				vocWeaponMap[vocationId] = true;
+			}
+		}
+
+		const std::string& getVocationString() const {
+			return vocationString;
+		}
+		void setVocationString(const std::string& str) {
+			vocationString = str;
+		}
+
+		WeaponAction_t action = WEAPONACTION_NONE;
+		CombatParams params;
+		WeaponType_t weaponType;
+		std::map<uint16_t, bool> vocWeaponMap;
 
 	protected:
-		virtual std::string getScriptEventName();
+		void internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const;
+		void internalUseWeapon(Player* player, Item* item, Tile* tile) const;
 
-		bool executeUseWeapon(Player* player, const LuaVariant& var) const;
-		bool internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const;
-		bool internalUseWeapon(Player* player, Item* item, Tile* tile) const;
+		uint16_t id = 0;
 
-		virtual void onUsedWeapon(Player* player, Item* item, Tile* destTile) const;
-		virtual void onUsedAmmo(Player* player, Item* item, Tile* destTile) const;
-		virtual bool getSkillType(const Player* player, const Item* item, skills_t& skill, uint32_t& skillpoint) const {
+	private:
+		virtual bool getSkillType(const Player*, const Item*, skills_t&, uint32_t&) const {
 			return false;
 		}
 
-		int32_t getManaCost(const Player* player) const;
+		uint32_t getManaCost(const Player* player) const;
+		int32_t getHealthCost(const Player* player) const;
 
-		uint16_t id;
-		bool enabled;
-		bool premium;
-		uint32_t exhaustion;
-		bool wieldUnproperly;
-		int32_t level;
-		int32_t magLevel;
-		int32_t mana;
-		int32_t manaPercent;
-		int32_t soul;
-		int32_t range;
-		AmmoAction_t ammoAction;
-		CombatParams params;
+		uint32_t level = 0;
+		uint32_t magLevel = 0;
+		uint32_t mana = 0;
+		uint32_t manaPercent = 0;
+		uint32_t health = 0;
+		uint32_t healthPercent = 0;
+		uint32_t soul = 0;
+		uint32_t wieldInfo = WIELDINFO_NONE;
+		uint8_t breakChance = 0;
+		bool enabled = true;
+		bool premium = false;
+		bool wieldUnproperly = false;
+		std::string vocationString = "";
+
+		std::string getScriptEventName() const override final;
+
+		bool executeUseWeapon(Player* player, const LuaVariant& var) const;
+		void onUsedWeapon(Player* player, Item* item, Tile* destTile) const;
+
+		static void decrementItemCount(Item* item);
+
+		friend class Combat;
+};
+
+class WeaponMelee final : public Weapon
+{
+	public:
+		explicit WeaponMelee(LuaScriptInterface* interface);
+
+		void configureWeapon(const ItemType& it) override;
+
+		bool useWeapon(Player* player, Item* item, Creature* target) const override;
+
+		int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const override;
+		int32_t getElementDamage(const Player* player, const Creature* target, const Item* item) const override;
+		CombatType_t getElementType() const override { return elementType; }
 
 	private:
-		typedef std::map<int32_t, bool> VocWeaponMap;
-		VocWeaponMap vocWeaponMap;
+		bool getSkillType(const Player* player, const Item* item, skills_t& skill, uint32_t& skillpoint) const override;
+
+		CombatType_t elementType = COMBAT_NONE;
+		uint16_t elementDamage = 0;
 };
 
-class WeaponMelee : public Weapon
+class WeaponDistance final : public Weapon
 {
 	public:
-		WeaponMelee(LuaScriptInterface* _interface);
-		virtual ~WeaponMelee() {}
+		explicit WeaponDistance(LuaScriptInterface* interface);
 
-		virtual bool configureEvent(xmlNodePtr p);
-		virtual bool configureWeapon(const ItemType& it);
-
-		virtual bool useWeapon(Player* player, Item* item, Creature* target) const;
-		virtual int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const;
-
-		int32_t getElementDamage(const Player* player, const Item* item) const;
-
-	protected:
-		virtual void onUsedWeapon(Player* player, Item* item, Tile* destTile) const;
-		virtual void onUsedAmmo(Player* player, Item* item, Tile* destTile) const;
-		virtual bool getSkillType(const Player* player, const Item* item, skills_t& skill, uint32_t& skillpoint) const;
-
-		CombatType_t elementType;
-		int16_t elementDamage;
-};
-
-class WeaponDistance : public Weapon
-{
-	public:
-		WeaponDistance(LuaScriptInterface* _interface);
-		virtual ~WeaponDistance() {}
-
-		virtual bool configureEvent(xmlNodePtr p);
-		virtual bool configureWeapon(const ItemType& it);
-		virtual bool interruptSwing() const {
+		void configureWeapon(const ItemType& it) override;
+		bool interruptSwing() const override {
 			return true;
 		}
 
-		virtual int32_t playerWeaponCheck(Player* player, Creature* target) const;
-		virtual bool useWeapon(Player* player, Item* item, Creature* target) const;
-		virtual int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const;
+		bool useWeapon(Player* player, Item* item, Creature* target) const override;
 
-		int32_t getElementDamage(const Player* player, const Creature* target, const Item* item) const;
+		int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const override;
+		int32_t getElementDamage(const Player* player, const Creature* target, const Item* item) const override;
+		CombatType_t getElementType() const override { return elementType; }
 
-	protected:
-		virtual void onUsedWeapon(Player* player, Item* item, Tile* destTile) const;
-		virtual void onUsedAmmo(Player* player, Item* item, Tile* destTile) const;
-		virtual bool getSkillType(const Player* player, const Item* item, skills_t& skill, uint32_t& skillpoint) const;
+	private:
+		bool getSkillType(const Player* player, const Item* item, skills_t& skill, uint32_t& skillpoint) const override;
 
-		int32_t hitChance;
-		int32_t maxHitChance;
-		int32_t breakChance;
-		int32_t ammuAttackValue;
-
-		CombatType_t elementType;
-		int16_t elementDamage;
+		CombatType_t elementType = COMBAT_NONE;
+		uint16_t elementDamage = 0;
 };
 
-class WeaponWand : public Weapon
+class WeaponWand final : public Weapon
 {
 	public:
-		WeaponWand(LuaScriptInterface* _interface);
-		virtual ~WeaponWand() {}
+		explicit WeaponWand(LuaScriptInterface* interface) : Weapon(interface) {}
 
-		virtual bool configureEvent(xmlNodePtr p);
-		virtual bool configureWeapon(const ItemType& it);
+		bool configureEvent(const pugi::xml_node& node) override;
+		void configureWeapon(const ItemType& it) override;
 
-		virtual int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const;
+		int32_t getWeaponDamage(const Player* player, const Creature* target, const Item* item, bool maxDamage = false) const override;
+		int32_t getElementDamage(const Player*, const Creature*, const Item*) const override { return 0; }
+		CombatType_t getElementType() const override { return COMBAT_NONE; }
 
-	protected:
-		virtual bool getSkillType(const Player* player, const Item* item, skills_t& skill, uint32_t& skillpoint) const {
+		void setMinChange(int32_t change) {
+			minChange = change;
+		}
+
+		void setMaxChange(int32_t change) {
+			maxChange = change;
+		}
+
+	private:
+		bool getSkillType(const Player*, const Item*, skills_t&, uint32_t&) const override {
 			return false;
 		}
 
-		int32_t minChange;
-		int32_t maxChange;
+		int32_t minChange = 0;
+		int32_t maxChange = 0;
 };
 
 #endif

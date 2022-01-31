@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,18 +17,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_ITEMLOADER_H__
-#define __OTSERV_ITEMLOADER_H__
+#ifndef FS_ITEMLOADER_H_107F1D3EECC94CD0A0F528843010D5D4
+#define FS_ITEMLOADER_H_107F1D3EECC94CD0A0F528843010D5D4
 
 #include "fileloader.h"
-#include "definitions.h"
-
-typedef uint8_t attribute_t;
-typedef uint16_t datasize_t;
-typedef uint32_t flags_t;
 
 enum itemgroup_t {
-	ITEM_GROUP_NONE = 0,
+	ITEM_GROUP_NONE,
+
 	ITEM_GROUP_GROUND,
 	ITEM_GROUP_CONTAINER,
 	ITEM_GROUP_WEAPON, //deprecated
@@ -43,6 +39,7 @@ enum itemgroup_t {
 	ITEM_GROUP_FLUID,
 	ITEM_GROUP_DOOR, //deprecated
 	ITEM_GROUP_DEPRECATED,
+
 	ITEM_GROUP_LAST
 };
 
@@ -97,11 +94,19 @@ enum clientVersion_t {
 	CLIENT_VERSION_982 = 46,
 	CLIENT_VERSION_983 = 47,
 	CLIENT_VERSION_985 = 48,
-	CLIENT_VERSION_986 = 49
+	CLIENT_VERSION_986 = 49,
+	CLIENT_VERSION_1010 = 50,
+	CLIENT_VERSION_1020 = 51,
+	CLIENT_VERSION_1021 = 52,
+	CLIENT_VERSION_1030 = 53,
+	CLIENT_VERSION_1031 = 54,
+	CLIENT_VERSION_1035 = 55,
+	CLIENT_VERSION_1076 = 56,
+	CLIENT_VERSION_1098 = 57,
 };
 
 enum rootattrib_ {
-	ROOT_ATTR_VERSION = 0x01
+	ROOT_ATTR_VERSION = 0x01,
 };
 
 enum itemattrib_t {
@@ -144,32 +149,33 @@ enum itemattrib_t {
 };
 
 enum itemflags_t {
-	FLAG_BLOCK_SOLID = 1,
-	FLAG_BLOCK_PROJECTILE = 2,
-	FLAG_BLOCK_PATHFIND = 4,
-	FLAG_HAS_HEIGHT = 8,
-	FLAG_USEABLE = 16,
-	FLAG_PICKUPABLE = 32,
-	FLAG_MOVEABLE = 64,
-	FLAG_STACKABLE = 128,
-	FLAG_FLOORCHANGEDOWN = 256,
-	FLAG_FLOORCHANGENORTH = 512,
-	FLAG_FLOORCHANGEEAST = 1024,
-	FLAG_FLOORCHANGESOUTH = 2048,
-	FLAG_FLOORCHANGEWEST = 4096,
-	FLAG_ALWAYSONTOP = 8192,
-	FLAG_READABLE = 16384,
-	FLAG_ROTABLE = 32768,
-	FLAG_HANGABLE = 65536,
-	FLAG_VERTICAL = 131072,
-	FLAG_HORIZONTAL = 262144,
-	FLAG_CANNOTDECAY = 524288,
-	FLAG_ALLOWDISTREAD = 1048576,
-	FLAG_UNUSED = 2097152,
-	FLAG_CLIENTCHARGES = 4194304, /* deprecated */
-	FLAG_LOOKTHROUGH = 8388608,
-	FLAG_ANIMATION = 16777216,
-	FLAG_FULLTILE = 33554432
+	FLAG_BLOCK_SOLID = 1 << 0,
+	FLAG_BLOCK_PROJECTILE = 1 << 1,
+	FLAG_BLOCK_PATHFIND = 1 << 2,
+	FLAG_HAS_HEIGHT = 1 << 3,
+	FLAG_USEABLE = 1 << 4,
+	FLAG_PICKUPABLE = 1 << 5,
+	FLAG_MOVEABLE = 1 << 6,
+	FLAG_STACKABLE = 1 << 7,
+	FLAG_FLOORCHANGEDOWN = 1 << 8, // unused
+	FLAG_FLOORCHANGENORTH = 1 << 9, // unused
+	FLAG_FLOORCHANGEEAST = 1 << 10, // unused
+	FLAG_FLOORCHANGESOUTH = 1 << 11, // unused
+	FLAG_FLOORCHANGEWEST = 1 << 12, // unused
+	FLAG_ALWAYSONTOP = 1 << 13,
+	FLAG_READABLE = 1 << 14,
+	FLAG_ROTATABLE = 1 << 15,
+	FLAG_HANGABLE = 1 << 16,
+	FLAG_VERTICAL = 1 << 17,
+	FLAG_HORIZONTAL = 1 << 18,
+	FLAG_CANNOTDECAY = 1 << 19, // unused
+	FLAG_ALLOWDISTREAD = 1 << 20,
+	FLAG_UNUSED = 1 << 21, // unused
+	FLAG_CLIENTCHARGES = 1 << 22, /* deprecated */
+	FLAG_LOOKTHROUGH = 1 << 23,
+	FLAG_ANIMATION = 1 << 24,
+	FLAG_FULLTILE = 1 << 25, // unused
+	FLAG_FORCEUSE = 1 << 26,
 };
 
 //1-byte aligned structs

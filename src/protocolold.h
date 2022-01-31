@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,65 +17,30 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_PROTOCOL_OLD_H__
-#define __OTSERV_PROTOCOL_OLD_H__
+#ifndef FS_PROTOCOLOLD_H_5487B862FE144AE0904D098A3238E161
+#define FS_PROTOCOLOLD_H_5487B862FE144AE0904D098A3238E161
 
 #include "protocol.h"
 
 class NetworkMessage;
-class OutputMessage;
 
-class ProtocolOld : public Protocol
+class ProtocolOld final : public Protocol
 {
 	public:
 		// static protocol information
 		enum {server_sends_first = false};
-		enum {use_checksum = false};
-
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-		static uint32_t protocolOldCount;
-#endif
-
-		ProtocolOld(Connection_ptr connection) : Protocol(connection) {
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-			protocolOldCount++;
-#endif
-		}
-
-		virtual ~ProtocolOld() {
-#ifdef __ENABLE_SERVER_DIAGNOSTIC__
-			protocolOldCount--;
-#endif
-		}
-
-		virtual void onRecvFirstMessage(NetworkMessage& msg);
-
-	protected:
-		void disconnectClient(uint8_t error, const char* message);
-
-		bool parseFirstPacket(NetworkMessage& msg);
-};
-
-class ProtocolOldLogin : public ProtocolOld
-{
-	public:
 		enum {protocol_identifier = 0x01};
+		enum {use_checksum = false};
 		static const char* protocol_name() {
 			return "old login protocol";
 		}
 
-		ProtocolOldLogin(Connection_ptr connection) : ProtocolOld(connection) {}
-};
+		explicit ProtocolOld(Connection_ptr connection) : Protocol(connection) {}
 
-class ProtocolOldGame : public ProtocolOld
-{
-	public:
-		enum {protocol_identifier = 0x0A};
-		static const char* protocol_name() {
-			return "old gameworld protocol";
-		}
+		void onRecvFirstMessage(NetworkMessage& msg) override;
 
-		ProtocolOldGame(Connection_ptr connection) : ProtocolOld(connection) {}
+	private:
+		void disconnectClient(const std::string& message);
 };
 
 #endif

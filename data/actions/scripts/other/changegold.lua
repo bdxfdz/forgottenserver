@@ -1,18 +1,19 @@
-function onUse(cid, item, fromPosition, itemEx, toPosition)
-	if item.itemid == ITEM_GOLD_COIN and item.type == ITEMCOUNT_MAX then
-		doChangeTypeItem(item.uid, item.type - item.type)
-		doPlayerAddItem(cid, ITEM_PLATINUM_COIN, 1)
-	elseif item.itemid == ITEM_PLATINUM_COIN and item.type == ITEMCOUNT_MAX then
-		doChangeTypeItem(item.uid, item.type - item.type)
-		doPlayerAddItem(cid, ITEM_CRYSTAL_COIN, 1)
-	elseif item.itemid == ITEM_PLATINUM_COIN and item.type < ITEMCOUNT_MAX then
-		doChangeTypeItem(item.uid, item.type - 1)
-		doPlayerAddItem(cid, ITEM_GOLD_COIN, ITEMCOUNT_MAX)
-	elseif item.itemid == ITEM_CRYSTAL_COIN then
-		doChangeTypeItem(item.uid, item.type - 1)
-		doPlayerAddItem(cid, ITEM_PLATINUM_COIN, ITEMCOUNT_MAX)
+local config = {
+	[ITEM_GOLD_COIN] = {changeTo = ITEM_PLATINUM_COIN},
+	[ITEM_PLATINUM_COIN] = {changeBack = ITEM_GOLD_COIN, changeTo = ITEM_CRYSTAL_COIN},
+	[ITEM_CRYSTAL_COIN] = {changeBack = ITEM_PLATINUM_COIN}
+}
+
+function onUse(player, item, fromPosition, target, toPosition, isHotkey)
+	local coin = config[item:getId()]
+	if coin.changeTo and item.type == 100 then
+		item:remove()
+		player:addItem(coin.changeTo, 1)
+	elseif coin.changeBack then
+		item:remove(1)
+		player:addItem(coin.changeBack, 100)
 	else
-		return FALSE
+		return false
 	end
-	return TRUE
+	return true
 end

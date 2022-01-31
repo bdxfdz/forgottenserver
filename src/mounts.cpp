@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,138 +20,63 @@
 #include "otpch.h"
 
 #include "mounts.h"
+
+#include "pugicast.h"
 #include "tools.h"
-
-Mount::Mount(uint8_t _id, uint16_t _clientId, const std::string& _name, int32_t _speed, bool _premium)
-{
-	id = _id;
-	clientId = _clientId;
-	name = _name;
-	speed = _speed;
-	premium = _premium;
-}
-
-bool Mount::isTamed(Player* player) const
-{
-	if (!player) {
-		return false;
-	}
-
-	if (player->isAccessPlayer()) {
-		return true;
-	}
-
-	if (premium && !player->isPremium()) {
-		return false;
-	}
-
-	uint8_t tmpId = id - 1;
-
-	int32_t value = 0;
-
-	if (!player->getStorageValue(PSTRG_MOUNTS_RANGE_START + (tmpId / 31), value)) {
-		return false;
-	}
-
-	int32_t tmp = (1 << (tmpId % 31));
-	return (tmp & value) == tmp;
-}
-
-Mounts::~Mounts()
-{
-	for (MountsList::iterator it = mounts.begin(), end = mounts.end(); it != end; ++it) {
-		delete (*it);
-	}
-
-	mounts.clear();
-}
 
 bool Mounts::reload()
 {
-	for (MountsList::iterator it = mounts.begin(), end = mounts.end(); it != end; ++it) {
-		delete (*it);
-	}
-
 	mounts.clear();
 	return loadFromXml();
 }
 
 bool Mounts::loadFromXml()
 {
-	xmlDocPtr doc = xmlParseFile("data/XML/mounts.xml");
-
-	if (!doc) {
+	pugi::xml_document doc;
+	pugi::xml_parse_result result = doc.load_file("data/XML/mounts.xml");
+	if (!result) {
+		printXMLError("Error - Mounts::loadFromXml", "data/XML/mounts.xml", result);
 		return false;
 	}
 
-	xmlNodePtr root, p;
-	root = xmlDocGetRootElement(doc);
-
-	if (xmlStrcmp(root->name, (const xmlChar*)"mounts") != 0) {
-		xmlFreeDoc(doc);
-		return false;
+	for (auto mountNode : doc.child("mounts").children()) {
+		mounts.emplace_back(
+			static_cast<uint8_t>(pugi::cast<uint16_t>(mountNode.attribute("id").value())),
+			pugi::cast<uint16_t>(mountNode.attribute("clientid").value()),
+			mountNode.attribute("name").as_string(),
+			pugi::cast<int32_t>(mountNode.attribute("speed").value()),
+			mountNode.attribute("premium").as_bool()
+		);
 	}
-
-	int32_t intValue;
-	std::string strValue;
-	p = root->children;
-
-	while (p) {
-		if (xmlStrcmp(p->name, (const xmlChar*)"mount") == 0) {
-			int8_t id = 0;
-			int16_t clientid = 0;
-			std::string name;
-			int32_t speed = 0;
-			bool premium = true;
-
-			if (readXMLInteger(p, "id", intValue)) {
-				id = intValue;
-			}
-
-			if (readXMLInteger(p, "clientid", intValue)) {
-				clientid = intValue;
-			}
-
-			if (readXMLString(p, "name", strValue)) {
-				name = strValue;
-			}
-
-			if (readXMLInteger(p, "speed", intValue)) {
-				speed = intValue;
-			}
-
-			if (readXMLString(p, "premium", strValue)) {
-				premium = booleanString(strValue);
-			}
-
-			mounts.push_back(new Mount(id, clientid, name, speed, premium));
-		}
-
-		p = p->next;
-	}
-
-	xmlFreeDoc(doc);
+	mounts.shrink_to_fit();
 	return true;
 }
 
 Mount* Mounts::getMountByID(uint8_t id)
 {
-	for (MountsList::iterator it = mounts.begin(), end = mounts.end(); it != end; ++it) {
-		if ((*it)->getID() == id) {
-			return (*it);
+	auto it = std::find_if(mounts.begin(), mounts.end(), [id](const Mount& mount) {
+		return mount.id == id;
+	});
+
+	return it != mounts.end() ? &*it : nullptr;
+}
+
+Mount* Mounts::getMountByName(const std::string& name) {
+	auto mountName = name.c_str();
+	for (auto& it : mounts) {
+		if (strcasecmp(mountName, it.name.c_str()) == 0) {
+			return &it;
 		}
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 Mount* Mounts::getMountByClientID(uint16_t clientId)
 {
-	for (MountsList::iterator it = mounts.begin(), end = mounts.end(); it != end; ++it) {
-		if ((*it)->getClientID() == clientId) {
-			return (*it);
-		}
-	}
+	auto it = std::find_if(mounts.begin(), mounts.end(), [clientId](const Mount& mount) {
+		return mount.clientId == clientId;
+	});
 
-	return NULL;
+	return it != mounts.end() ? &*it : nullptr;
 }

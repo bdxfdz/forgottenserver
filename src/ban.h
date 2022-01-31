@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_BAN_H__
-#define __OTSERV_BAN_H__
-
-#include <boost/thread/recursive_mutex.hpp>
-#include <list>
-#include "player.h"
+#ifndef FS_BAN_H_CADB975222D745F0BDA12D982F1006E3
+#define FS_BAN_H_CADB975222D745F0BDA12D982F1006E3
 
 struct BanInfo {
 	std::string bannedBy;
@@ -31,35 +27,32 @@ struct BanInfo {
 };
 
 struct ConnectBlock {
+	constexpr ConnectBlock(uint64_t lastAttempt, uint64_t blockTime, uint32_t count) :
+		lastAttempt(lastAttempt), blockTime(blockTime), count(count) {}
+
 	uint64_t lastAttempt;
 	uint64_t blockTime;
 	uint32_t count;
 };
 
-typedef std::map<uint32_t, ConnectBlock > IpConnectMap;
+using IpConnectMap = std::map<uint32_t, ConnectBlock>;
 
 class Ban
 {
 	public:
-		bool acceptConnection(uint32_t clientip);
+		bool acceptConnection(uint32_t clientIP);
 
-	protected:
+	private:
 		IpConnectMap ipConnectMap;
-
-		mutable boost::recursive_mutex banLock;
+		std::recursive_mutex lock;
 };
 
 class IOBan
 {
 	public:
-		static IOBan* getInstance() {
-			static IOBan instance;
-			return &instance;
-		}
-
-		bool isAccountBanned(uint32_t accountId, BanInfo& banInfo);
-		bool isIpBanned(uint32_t ip, BanInfo& banInfo);
-		bool isPlayerNamelocked(uint32_t playerId);
+		static bool isAccountBanned(uint32_t accountId, BanInfo& banInfo);
+		static bool isIpBanned(uint32_t clientIP, BanInfo& banInfo);
+		static bool isPlayerNamelocked(uint32_t playerId);
 };
 
 #endif

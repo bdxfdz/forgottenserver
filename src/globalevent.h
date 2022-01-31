@@ -1,6 +1,6 @@
 /**
- * The Forgotten Server - a server application for the MMORPG Tibia
- * Copyright (C) 2013  Mark Samman <mark.samman@gmail.com>
+ * The Forgotten Server - a free and open-source MMORPG server emulator
+ * Copyright (C) 2019  Mark Samman <mark.samman@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __OTSERV_GLOBALEVENT_H__
-#define __OTSERV_GLOBALEVENT_H__
+#ifndef FS_GLOBALEVENT_H_B3FB9B848EA3474B9AFC326873947E3C
+#define FS_GLOBALEVENT_H_B3FB9B848EA3474B9AFC326873947E3C
 #include "baseevents.h"
 
 #include "const.h"
@@ -29,81 +29,98 @@ enum GlobalEvent_t {
 
 	GLOBALEVENT_STARTUP,
 	GLOBALEVENT_SHUTDOWN,
-	GLOBALEVENT_RECORD
+	GLOBALEVENT_RECORD,
 };
 
 class GlobalEvent;
-typedef std::map<std::string, GlobalEvent*> GlobalEventMap;
+using GlobalEvent_ptr = std::unique_ptr<GlobalEvent>;
+using GlobalEventMap = std::map<std::string, GlobalEvent>;
 
-class GlobalEvents : public BaseEvents
+class GlobalEvents final : public BaseEvents
 {
 	public:
 		GlobalEvents();
-		virtual ~GlobalEvents();
-		void startup();
+		~GlobalEvents();
+
+		// non-copyable
+		GlobalEvents(const GlobalEvents&) = delete;
+		GlobalEvents& operator=(const GlobalEvents&) = delete;
+
+		void startup() const;
 
 		void timer();
 		void think();
-		void execute(GlobalEvent_t type);
+		void execute(GlobalEvent_t type) const;
 
 		GlobalEventMap getEventMap(GlobalEvent_t type);
-		void clearMap(GlobalEventMap& map);
+		static void clearMap(GlobalEventMap& map, bool fromLua);
 
-	protected:
-		virtual std::string getScriptBaseName() {
+		bool registerLuaEvent(GlobalEvent* event);
+		void clear(bool fromLua) override final;
+
+	private:
+		std::string getScriptBaseName() const override {
 			return "globalevents";
 		}
-		virtual void clear();
 
-		virtual Event* getEvent(const std::string& nodeName);
-		virtual bool registerEvent(Event* event, xmlNodePtr p);
+		Event_ptr getEvent(const std::string& nodeName) override;
+		bool registerEvent(Event_ptr event, const pugi::xml_node& node) override;
 
-		virtual LuaScriptInterface& getScriptInterface() {
-			return m_scriptInterface;
+		LuaScriptInterface& getScriptInterface() override {
+			return scriptInterface;
 		}
-		LuaScriptInterface m_scriptInterface;
+		LuaScriptInterface scriptInterface;
 
 		GlobalEventMap thinkMap, serverMap, timerMap;
-		int32_t thinkEventId, timerEventId;
+		int32_t thinkEventId = 0, timerEventId = 0;
 };
 
-class GlobalEvent : public Event
+class GlobalEvent final : public Event
 {
 	public:
-		GlobalEvent(LuaScriptInterface* _interface);
-		virtual ~GlobalEvent() {}
+		explicit GlobalEvent(LuaScriptInterface* interface);
 
-		virtual bool configureEvent(xmlNodePtr p);
+		bool configureEvent(const pugi::xml_node& node) override;
 
 		bool executeRecord(uint32_t current, uint32_t old);
-		bool executeEvent();
+		bool executeEvent() const;
 
 		GlobalEvent_t getEventType() const {
-			return m_eventType;
+			return eventType;
 		}
-		std::string getName() const {
-			return m_name;
+		void setEventType(GlobalEvent_t type) {
+			eventType = type;
+		}
+
+		const std::string& getName() const {
+			return name;
+		}
+		void setName(std::string eventName) {
+			name = eventName;
 		}
 
 		uint32_t getInterval() const {
-			return m_interval;
+			return interval;
+		}
+		void setInterval(uint32_t eventInterval) {
+			interval |= eventInterval;
 		}
 
 		int64_t getNextExecution() const {
-			return m_nextExecution;
+			return nextExecution;
 		}
 		void setNextExecution(int64_t time) {
-			m_nextExecution = time;
+			nextExecution = time;
 		}
 
-	protected:
-		GlobalEvent_t m_eventType;
+	private:
+		GlobalEvent_t eventType = GLOBALEVENT_NONE;
 
-		virtual std::string getScriptEventName();
+		std::string getScriptEventName() const override;
 
-		std::string m_name;
-		int64_t m_nextExecution;
-		uint32_t m_interval;
+		std::string name;
+		int64_t nextExecution = 0;
+		uint32_t interval = 0;
 };
 
 #endif
